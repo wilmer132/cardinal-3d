@@ -104,7 +104,7 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh:
 
     This is where bevel_vertex_positions, bevel_edge_positions, and
     bevel_face_positions come in: these functions are called repeatedly as you
-    move your mouse, the position of which determins the normal and tangent offset
+    move your mouse, the position of which determines the normal and tangent offset
     parameters. These functions are also passed an array of the original vertex
     positions: for  bevel_vertex, it has one element, the original vertex position,
     for bevel_edge,  two for the two vertices, and for bevel_face, it has the original
