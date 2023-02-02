@@ -75,9 +75,32 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_face(Halfedge_Me
     flipped edge.
 */
 std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::EdgeRef e) {
-
-    (void)e;
-    return std::nullopt;
+  if (e->on_boundary()) return e;
+  /* Grab items to update later. */
+  HalfedgeRef he = e->halfedge();
+  HalfedgeRef he_twin = he->twin();
+  HalfedgeRef he_mid = he->next();
+  HalfedgeRef he_twin_mid = he_twin->next();
+  /* Get to new half edge start and end. Maintain orientation for manifold*/
+  HalfedgeRef ne_start = he->twin()->next()->next();
+  HalfedgeRef ne_end = he->next()->next();
+  /* Adjust old half edge/twin. */
+  he->set_neighbors(ne_end, he_twin, ne_start->vertex(), e, he->face());
+  he_twin->set_neighbors(ne_start, he, ne_end->vertex(), he_twin->edge(), he_twin->face());
+  /* Adjust new half edge/twin. */
+  he_mid->_next = he_twin;
+  he_twin_mid->_next = he;
+  /* Traverse to last edge before loop to change last half edge. */
+  HalfedgeRef le = he->_next;
+  while (le->next() != he) le = le->next();
+  HalfedgeRef le_twin = he_twin->_next;
+  while (le_twin->next() != he_twin) le_twin = le_twin->next();
+  le->_next = he_twin_mid;
+  le_twin->_next = he_mid;
+  /* Mid half edges have differing faces. Update them accordingly. */
+  // he_mid->_face = he_mid->next()->face();
+  // he_twin_mid->_face = he_twin_mid->next()->face();
+  return e;
 }
 
 /*
