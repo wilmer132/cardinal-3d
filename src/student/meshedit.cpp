@@ -75,9 +75,37 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_face(Halfedge_Me
     flipped edge.
 */
 std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::EdgeRef e) {
+  HalfedgeRef h = e->halfedge();
+  HalfedgeRef h_p = h->twin();
+  HalfedgeRef m = h->next();
+  HalfedgeRef m_p = h_p->next();
+  HalfedgeRef n = m->next();
+  HalfedgeRef n_p = m_p->next();
 
-    (void)e;
-    return std::nullopt;
+  VertexRef h_v = h->vertex();
+  VertexRef h_p_v = h_p->vertex();
+  
+  /* Update old half edge/twin. */
+  h->set_neighbors(n, h_p, n_p->vertex(), e, h->face());
+  h->vertex()->_halfedge = h;
+  h_p->set_neighbors(n_p, h, n->vertex(), h_p->edge(), h_p->face());
+  h_p->vertex()->_halfedge = h_p;
+
+  /* Update middle half edge/twin. */
+  m->set_neighbors(h_p, m->twin(), h_p_v, m->edge(), h_p->face());
+  m->vertex()->_halfedge = m;
+  m->face()->_halfedge = m;
+  m_p->set_neighbors(h, m_p->twin(), h_v, m_p->edge(), h->face());
+  m_p->vertex()->_halfedge = m_p;
+  m_p->face()->_halfedge = m_p;
+
+  /* Retrieve last half edges. Update them. */
+  while (n->next() != h) n = n->next();
+  n->set_neighbors(m_p, n->twin(), n->vertex(), n->edge(), n->face());
+  while (n_p->next() != h_p) n_p = n_p->next();
+  n_p->set_neighbors(m, n_p->twin(), n_p->vertex(), n_p->edge(), n_p->face());
+
+  return e;
 }
 
 /*
