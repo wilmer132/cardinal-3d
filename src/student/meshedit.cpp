@@ -114,9 +114,83 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     the edge that was split, rather than the new edges.
 */
 std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh::EdgeRef e) {
+  /* Assume triangle polygons only. Do nothing, otherwise. */
+  if (e->halfedge()->face()->degree() > 3) return std::nullopt;
 
-    (void)e;
-    return std::nullopt;
+  /* Retrieve vertex coordinates. E.g. up, down, right, left, etc. */
+  VertexRef v = e->halfedge()->vertex();
+  VertexRef v_c = new_vertex();
+  VertexRef v_r = e->halfedge()->next()->next()->vertex();
+  VertexRef v_d = e->halfedge()->twin()->vertex();
+  VertexRef v_l = e->halfedge()->twin()->next()->next()->vertex();
+  
+  /* Create three inner edges. Recycle existing edge. 
+     i.e. edge-right, -down, -low, etc. */
+  EdgeRef e_r = new_edge();
+  EdgeRef e_d = new_edge();
+  EdgeRef e_l = new_edge();
+
+  /* Create six half-edges. Recycle existing half-edges. */
+  HalfedgeRef h = e->halfedge()->twin(); // NOTE: Twin
+  HalfedgeRef h_t = e->halfedge();
+  HalfedgeRef h_r = new_halfedge();
+  HalfedgeRef h_r_t = new_halfedge();
+  HalfedgeRef h_d = new_halfedge();
+  HalfedgeRef h_d_t = new_halfedge();
+  HalfedgeRef h_l = new_halfedge();
+  HalfedgeRef h_l_t = new_halfedge();
+
+  /* Retrieve relevant existing half-edges. */
+  HalfedgeRef h_ur = h_t->next()->next();
+  HalfedgeRef h_lr = h_t->next();
+  HalfedgeRef h_ul = h->next();
+  HalfedgeRef h_ll = h->next()->next();
+
+  /* Create two faces. Recycle existing faces. */
+  FaceRef f_ur = e->halfedge()->face();
+  FaceRef f_lr = new_face();
+  FaceRef f_ll = e->halfedge()->twin()->face();
+  FaceRef f_ul = new_face();
+
+  /* Adjust middle vertex position. */
+  v_c->pos = e->center();
+
+  /* Set up half edge's neighbors. */
+  h->set_neighbors(h_ul, h_t, v_c, e, f_ul);
+  h_t->set_neighbors(h_r, h, v, e, f_ur);
+  h_r->set_neighbors(h_ur, h_r_t, v_c, e_r, f_ur);
+  h_r_t->set_neighbors(h_d, h_r, v_r, e_r, f_lr);
+  h_d->set_neighbors(h_lr, h_d_t, v_c, e_d, f_lr);
+  h_d_t->set_neighbors(h_l, h_d, v_d, e_d, f_ll);
+  h_l->set_neighbors(h_ll, h_l_t, v_c, e_l, f_ll);
+  h_l_t->set_neighbors(h, h_l, v_l, e_l, f_ul);
+
+  /* Set up older half edges's neighbors. */
+  h_ur->set_neighbors(h_t, h_ur->twin(), h_ur->vertex(), h_ur->edge(), f_ur);
+  h_lr->set_neighbors(h_r_t, h_lr->twin(), h_lr->vertex(), h_lr->edge(), f_lr);
+  h_ll->set_neighbors(h_d_t, h_ll->twin(), h_ll->vertex(), h_ll->edge(), f_ll);
+  h_ul->set_neighbors(h_l_t, h_ul->twin(), h_ul->vertex(), h_ul->edge(), f_ul);
+
+  /* Set up vertices. */
+  v->_halfedge = h_t;
+  v_c->_halfedge = h_d;
+  v_r->_halfedge = h_r_t;
+  v_d->_halfedge = h_d_t;
+  v_l->_halfedge = h_l_t;
+
+  /* Set up inner edges. */
+  e->_halfedge = h;
+  e_r->_halfedge = h_r;
+  e_d->_halfedge = h_d;
+  e_l->_halfedge = h_l;
+
+  /* Set up faces. */
+  f_ur->_halfedge = h_t;
+  f_lr->_halfedge = h_r_t;
+  f_ll->_halfedge = h_d_t;
+  f_ul->_halfedge = h_l_t;
+
+  return v_c;
 }
 
 /* Note on the beveling process:
