@@ -146,10 +146,10 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh:
   HalfedgeRef h_ul = h->next();
   HalfedgeRef h_ll = h->next()->next();
 
-  /* Create three faces. Recycle existing half-edges. */
+  /* Create two faces. Recycle existing faces. */
   FaceRef f_ur = e->halfedge()->face();
   FaceRef f_lr = new_face();
-  FaceRef f_ll = new_face();
+  FaceRef f_ll = e->halfedge()->twin()->face();
   FaceRef f_ul = new_face();
 
   /* Adjust middle vertex position. */
@@ -166,10 +166,10 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh:
   h_l_t->set_neighbors(h, h_l, v_l, e_l, f_ul);
 
   /* Set up older half edges's neighbors. */
-  h_ur->set_neighbors(h_t, h_ul->twin(), h_ul->vertex(), h_ul->edge(), f_ur);
-  h_lr->set_neighbors(h_r_t, h_lr->twin(), h_lr->vertex(), h_ul->edge(), f_lr);
+  h_ur->set_neighbors(h_t, h_ur->twin(), h_ur->vertex(), h_ur->edge(), f_ur);
+  h_lr->set_neighbors(h_r_t, h_lr->twin(), h_lr->vertex(), h_lr->edge(), f_lr);
   h_ll->set_neighbors(h_d_t, h_ll->twin(), h_ll->vertex(), h_ll->edge(), f_ll);
-  h_ul->set_neighbors(h_l_t, h_ul->twin(), h_ul->vertex(), h_ul->edge(), f_ur);
+  h_ul->set_neighbors(h_l_t, h_ul->twin(), h_ul->vertex(), h_ul->edge(), f_ul);
 
   /* Set up vertices. */
   v->_halfedge = h_t;
@@ -184,7 +184,11 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::split_edge(Halfedge_Mesh:
   e_d->_halfedge = h_d;
   e_l->_halfedge = h_l;
 
-  validate();
+  /* Set up faces. */
+  f_ur->_halfedge = h_t;
+  f_lr->_halfedge = h_r_t;
+  f_ll->_halfedge = h_d_t;
+  f_ul->_halfedge = h_l_t;
 
   return v_c;
 }
