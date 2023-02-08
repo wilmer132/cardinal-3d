@@ -1,10 +1,13 @@
 
+#include <iostream>
 #include <queue>
 #include <set>
 #include <unordered_map>
 
 #include "../geometry/halfedge.h"
 #include "debug.h"
+
+using namespace std;
 
 /* Note on local operation return types:
 
@@ -55,9 +58,105 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::erase_edge(Halfedge_Mesh::E
     the new vertex created by the collapse.
 */
 std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Mesh::EdgeRef e) {
+    /* Center is new location. */
+    Vec3 center = e->center();
 
-    (void)e;
-    return std::nullopt;
+    /* Shift first vertex towards the center. */
+    HalfedgeRef edge_he = e->halfedge();
+    VertexRef centered_v = edge_he->vertex();
+    centered_v->pos = center;
+
+    /* Get information for opposite side / vertex. */
+    HalfedgeRef edge_he_twin = edge_he->twin();
+    VertexRef opposite_v = edge_he_twin->vertex();
+    HalfedgeRef opposite_v_he = opposite_v->halfedge();
+
+    /* Get first two faces to save for later. */
+    FaceRef top_face = edge_he->face();
+    FaceRef bottom_face = edge_he_twin->face();
+
+    /* Get half-edges from faces that we will delete later. */
+    std::set<HalfedgeRef> top_face_halfedges;
+    HalfedgeRef starting_he_top = top_face->halfedge();
+    HalfedgeRef curr_he_top = starting_he_top;
+    do {
+        top_face_halfedges.insert(curr_he_top);
+        curr_he_top = curr_he_top->next();
+    } while(curr_he_top != starting_he_top);
+
+    std::set<HalfedgeRef> bottom_face_halfedges;
+    HalfedgeRef starting_he_bot = bottom_face->halfedge();
+    HalfedgeRef curr_he_bot = starting_he_bot;
+    do {
+        bottom_face_halfedges.insert(curr_he_bot);
+        curr_he_bot = curr_he_bot->next();
+    } while(curr_he_bot != starting_he_bot);
+
+    /* Get twins that we will need to rewire later. */
+    bool have_zero_area = (top_face_halfedges.size() == 3);
+    vector<HalfedgeRef> top_twins;
+    EdgeRef top_edge_to_delete, top_edge_to_keep;
+    vector<HalfedgeRef> bottom_twins;
+    EdgeRef bot_edge_to_delete, bot_edge_to_keep;
+    if(have_zero_area) {
+        top_twins.push_back(edge_he->next()->twin());
+        top_twins.push_back(edge_he->next()->next()->twin());
+        top_edge_to_keep = edge_he->next()->twin()->edge();
+        top_edge_to_delete = edge_he->next()->next()->twin()->edge();
+
+        bottom_twins.push_back(edge_he_twin->next()->twin());
+        bottom_twins.push_back(edge_he_twin->next()->next()->twin());
+        bot_edge_to_keep = edge_he_twin->next()->twin()->edge();
+        bot_edge_to_delete = edge_he_twin->next()->next()->twin()->edge();
+    }
+
+    /* Move half-edges that are pointing at second vertex to point to center spot. */
+    HalfedgeRef start_he_shift = opposite_v->halfedge();
+    HalfedgeRef curr_he_shift = start_he_shift;
+    do {
+        HalfedgeRef temp = curr_he_shift->twin()->next();
+        curr_he_shift->_vertex = centered_v;
+        curr_he_shift = temp;
+    } while(curr_he_shift != start_he_shift);
+
+    centered_v->_halfedge = opposite_v_he;
+
+    /* If there is a zero area face, rewire and erase appropriately. */
+    if (have_zero_area) {
+        HalfedgeRef adj_he_top = top_twins[0];
+        HalfedgeRef opp_he_top = top_twins[1];
+        adj_he_top->set_neighbors(adj_he_top->next(), opp_he_top, adj_he_top->vertex(), top_edge_to_keep, adj_he_top->face());
+        adj_he_top->vertex()->_halfedge = adj_he_top;
+        opp_he_top->set_neighbors(opp_he_top->next(), adj_he_top, centered_v, top_edge_to_keep, opp_he_top->face());
+        top_edge_to_keep->_halfedge = adj_he_top;
+        
+        HalfedgeRef adj_he_bot = bottom_twins[0];
+        HalfedgeRef opp_he_bot = bottom_twins[1];
+        adj_he_bot->set_neighbors(adj_he_bot->next(), opp_he_bot, adj_he_bot->vertex(), bot_edge_to_keep, adj_he_bot->face());
+        adj_he_bot->vertex()->_halfedge = adj_he_bot;
+        opp_he_bot->set_neighbors(opp_he_bot->next(), adj_he_bot, centered_v, bot_edge_to_keep, opp_he_bot->face());
+        bot_edge_to_keep->_halfedge = adj_he_bot;
+
+        erase(top_face);
+        for(HalfedgeRef h : top_face_halfedges) {
+            erase(h);
+        }
+
+        erase(bottom_face);
+        for(HalfedgeRef h : bottom_face_halfedges) {
+            erase(h);
+        }
+
+        erase(top_edge_to_delete);
+        erase(bot_edge_to_delete);
+    }
+
+    erase(e);
+    erase(opposite_v);
+
+    validate();
+
+    return centered_v;
 }
 
 /*
@@ -75,37 +174,37 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_face(Halfedge_Me
     flipped edge.
 */
 std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::EdgeRef e) {
-  HalfedgeRef h = e->halfedge();
-  HalfedgeRef h_p = h->twin();
-  HalfedgeRef m = h->next();
-  HalfedgeRef m_p = h_p->next();
-  HalfedgeRef n = m->next();
-  HalfedgeRef n_p = m_p->next();
+    HalfedgeRef h = e->halfedge();
+    HalfedgeRef h_p = h->twin();
+    HalfedgeRef m = h->next();
+    HalfedgeRef m_p = h_p->next();
+    HalfedgeRef n = m->next();
+    HalfedgeRef n_p = m_p->next();
 
-  VertexRef h_v = h->vertex();
-  VertexRef h_p_v = h_p->vertex();
-  
-  /* Update old half edge/twin. */
-  h->set_neighbors(n, h_p, n_p->vertex(), e, h->face());
-  h->vertex()->_halfedge = h;
-  h_p->set_neighbors(n_p, h, n->vertex(), h_p->edge(), h_p->face());
-  h_p->vertex()->_halfedge = h_p;
+    VertexRef h_v = h->vertex();
+    VertexRef h_p_v = h_p->vertex();
 
-  /* Update middle half edge/twin. */
-  m->set_neighbors(h_p, m->twin(), h_p_v, m->edge(), h_p->face());
-  m->vertex()->_halfedge = m;
-  m->face()->_halfedge = m;
-  m_p->set_neighbors(h, m_p->twin(), h_v, m_p->edge(), h->face());
-  m_p->vertex()->_halfedge = m_p;
-  m_p->face()->_halfedge = m_p;
+    /* Update old half edge/twin. */
+    h->set_neighbors(n, h_p, n_p->vertex(), e, h->face());
+    h->vertex()->_halfedge = h;
+    h_p->set_neighbors(n_p, h, n->vertex(), h_p->edge(), h_p->face());
+    h_p->vertex()->_halfedge = h_p;
 
-  /* Retrieve last half edges. Update them. */
-  while (n->next() != h) n = n->next();
-  n->set_neighbors(m_p, n->twin(), n->vertex(), n->edge(), n->face());
-  while (n_p->next() != h_p) n_p = n_p->next();
-  n_p->set_neighbors(m, n_p->twin(), n_p->vertex(), n_p->edge(), n_p->face());
+    /* Update middle half edge/twin. */
+    m->set_neighbors(h_p, m->twin(), h_p_v, m->edge(), h_p->face());
+    m->vertex()->_halfedge = m;
+    m->face()->_halfedge = m;
+    m_p->set_neighbors(h, m_p->twin(), h_v, m_p->edge(), h->face());
+    m_p->vertex()->_halfedge = m_p;
+    m_p->face()->_halfedge = m_p;
 
-  return e;
+    /* Retrieve last half edges. Update them. */
+    while(n->next() != h) n = n->next();
+    n->set_neighbors(m_p, n->twin(), n->vertex(), n->edge(), n->face());
+    while(n_p->next() != h_p) n_p = n_p->next();
+    n_p->set_neighbors(m, n_p->twin(), n_p->vertex(), n_p->edge(), n_p->face());
+
+    return e;
 }
 
 /*
