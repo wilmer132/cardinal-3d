@@ -174,6 +174,13 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_face(Halfedge_Me
     flipped edge.
 */
 std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::EdgeRef e) {
+    /* Record edges to change: 
+       h - half-edge
+       h_p - half-edge prime
+       m - medium half edge
+       m_p - same as before
+       n - next half-edge 
+       n_p - same as before. */
     HalfedgeRef h = e->halfedge();
     HalfedgeRef h_p = h->twin();
     HalfedgeRef m = h->next();
@@ -181,6 +188,7 @@ std::optional<Halfedge_Mesh::EdgeRef> Halfedge_Mesh::flip_edge(Halfedge_Mesh::Ed
     HalfedgeRef n = m->next();
     HalfedgeRef n_p = m_p->next();
 
+    /* Grab vertices from half-edge and prime. */
     VertexRef h_v = h->vertex();
     VertexRef h_p_v = h_p->vertex();
 
