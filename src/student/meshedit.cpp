@@ -483,15 +483,62 @@ void Halfedge_Mesh::bevel_face_positions(const std::vector<Vec3>& start_position
 */
 void Halfedge_Mesh::triangulate() {
     /* Loop through all of the faces in the shape. */
-    for (FaceRef f = faces_begin(); f != faces_end(); f++) {
+    /* Initialize start and end so we don't end up in infinite loop as we add more faces. */
+    FaceRef first_face = faces_begin();
+    FaceRef last_face = faces_begin();
+    for (FaceRef f = first_face; f != last_face; f++) {
         /* Get necessary information about starting edges. */
         HalfedgeRef start_he = f->halfedge();
         VertexRef start_v = start_he->vertex();
 
+        /* Check if we're already in a triangle. */
+        if (start_he->next()->next()->next() == start_he) {
+            printf("We are already in a triangle."); 
+            continue;
+        }
 
+        /* Halfedges to keep track of the sides that we have already encountered. */
+        HalfedgeRef opp_side = start_he;
+        HalfedgeRef adj_side = start_he->next();
 
+        /* Traverse all sides, and draw an edge when needed. */
+        /* Start with the half-edge that is two edges away. */
+        HalfedgeRef curr_he = start_he->next()->next();
+        do {
+            /* Create variables that represent new edge and new face. */
+            EdgeRef edge_new = new_edge();
+            FaceRef face_new = new_face();
+            /* Halfedge that goes from current vertex to starting vertex. */
+            HalfedgeRef curr_to_start_he = new_halfedge();
+            /* Halfedge that goes from original vertex to starting vertex. */
+            HalfedgeRef start_to_curr_he = new_halfedge();
 
+            VertexRef curr_v = curr_he->vertex();
 
+            // void set_neighbors(HalfedgeRef next, HalfedgeRef twin, VertexRef vertex, EdgeRef edge,FaceRef face) {
+
+            /* Adjust new halfedges based on thier appropriate info. */
+            curr_to_start_he->set_neighbors(opp_side, start_to_curr_he, curr_v, edge_new, face_new);
+            start_to_curr_he->set_neighbors(adj_side->next(), curr_to_start_he, start_v, edge_new, f);
+            edge_new->_halfedge = curr_to_start_he;
+            face_new->_halfedge = curr_to_start_he;
+
+            /* Adjust original halfedges to be updated to include new edges and new face. */
+            opp_side->set_neighbors(adj_side, opp_side->twin(), opp_side->vertex(), opp_side->edge(), face_new);
+            adj_side->set_neighbors(curr_to_start_he, adj_side->twin(), adj_side->vertex(), adj_side->edge(), face_new); 
+
+            /* Update variables to shift over as we move around loop.*/
+            opp_side = start_to_curr_he;
+            adj_side = curr_he;
+            curr_he = curr_he->next();
+
+            /* If our next step is the final one before we return to start. */
+            if (curr_he->next() == start_he) {
+                f->_halfedge = curr_he;
+                curr_he->set_neighbors(opp_side, curr_he->twin(), curr_he->vertex(), curr_he->edge(), f);
+            }
+        } while (curr_he != start_he);
+        printf("We made it through one face."); 
     }
 }
 
