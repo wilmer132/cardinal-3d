@@ -551,9 +551,72 @@ void Halfedge_Mesh::bevel_face_positions(const std::vector<Vec3>& start_position
 /*
     Splits all non-triangular faces into triangles.
 */
-void Halfedge_Mesh::triangulate() {
 
-    // For each face...
+void Halfedge_Mesh::triangulate() {
+    /* Loop through all of the faces in the shape. */
+    /* Initialize start and end so we don't end up in infinite loop as we add more faces. */
+    FaceRef first_face = faces_begin();
+    FaceRef last_face = faces_end();
+    for (FaceRef f = first_face; f != last_face; f++) {
+        /* Starting positions to remember as we traverse.*/
+        HalfedgeRef start_he = f->halfedge();
+        VertexRef start_v = start_he->vertex();
+
+        /* Halfedges to keep track of the sides that we have already encountered. */
+        HalfedgeRef opp_side = start_he;
+        HalfedgeRef adj_side = start_he->next();
+
+        /* Start with the half-edge that is two edges away. */
+        HalfedgeRef curr_he = start_he->next()->next();
+
+        /* Do not do all the work for a side that is already triangular. */
+        if (curr_he->next() == start_he) {
+            continue;
+        }
+
+        /* Traverse all sides, and draw an edge when needed. */
+        do {
+            /* We have found a loop inside our triangle. */
+            if (curr_he->next() == opp_side) {
+                break;
+            }
+            /* Create variables that represent new edge and new face. */
+            EdgeRef edge_new = new_edge();
+            FaceRef face_new = new_face();
+
+            /* Halfedges that go from current vertex to starting vertex. */
+            HalfedgeRef curr_to_start_he = new_halfedge();
+            HalfedgeRef start_to_curr_he = new_halfedge();
+
+            VertexRef curr_v = curr_he->vertex();
+
+            /* Adjust new edge across. */
+            curr_to_start_he->set_neighbors(opp_side, start_to_curr_he, curr_v, edge_new, face_new);
+            start_to_curr_he->set_neighbors(curr_he, curr_to_start_he, start_v, edge_new, f);
+
+            /* Adjust our additional sides that will now connect inside triangle. */
+            adj_side->set_neighbors(curr_to_start_he, adj_side->twin(), adj_side->vertex(), adj_side->edge(), face_new);
+            opp_side->set_neighbors(adj_side, opp_side->twin(), opp_side->vertex(), opp_side->edge(), face_new);
+
+            /* Adjust faces and new edge. */
+            face_new->halfedge() = curr_to_start_he;
+            edge_new->halfedge() = curr_to_start_he;
+
+            /* Update variables to shift over as we move around loop.*/
+            opp_side = start_to_curr_he;
+            adj_side = curr_he;
+            curr_he = curr_he->next();
+
+            /* For final triangle, make sure to rewire all three sides. */
+            if (curr_he->next() == start_he) { 
+                adj_side->set_neighbors(curr_he, adj_side->twin(), adj_side->vertex(), adj_side->edge(), f);
+                opp_side->set_neighbors(adj_side, curr_to_start_he, start_v, edge_new, f);
+                curr_he->set_neighbors(opp_side, curr_he->twin(), curr_he->vertex(), curr_he->edge(), f);
+                f->halfedge() = curr_he;
+            }
+        } while (curr_he != start_he);
+        validate();
+    }
 }
 
 /* Note on the quad subdivision process:
