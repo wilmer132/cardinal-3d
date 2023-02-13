@@ -372,8 +372,76 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::bevel_face(Halfedge_Mesh::F
     // Reminder: You should set the positions of new vertices (v->pos) to be exactly
     // the same as wherever they "started from."
 
-    (void)f;
-    return std::nullopt;
+    /* Define containers for all necessary components. */
+    vector<FaceRef> f_lst;
+    vector<VertexRef> vn_lst;
+    vector<HalfedgeRef> hn_lst;
+    vector<vector<HalfedgeRef>> h_lst;
+    vector<vector<EdgeRef>> e_lst;
+
+    for (unsigned int i = 0; i < f->degree(); i++) {
+      /* Create side_face. f_s: face_side. */
+      FaceRef f_s = new_face();
+      /* Collect new components for side face in container. */
+      vector<HalfedgeRef> hi_lst;
+      vector<EdgeRef> ei_lst;
+      /* Iterate side-face sides, collect items for later arranging. */
+      for (int j = 0; j < 3; j++) {
+        hi_lst.push_back(new_halfedge());
+        if (j < 2) ei_lst.push_back(new_edge()); /* 0: face_edge, 1: face_left_side_edge. */
+      }
+      f_lst.push_back(f_s);
+      vn_lst.push_back(new_vertex());
+      hn_lst.push_back(new_halfedge());
+      h_lst.push_back(hi_lst);
+      e_lst.push_back(ei_lst);
+    }
+
+    /* Create new face to return. */
+    FaceRef f_new = new_face();
+
+    HalfedgeRef f_i = f->halfedge();
+    /* Iterate over face half-edges, which represent all side faces. */
+    for (unsigned int i = 0; i < f->degree(); i++) {
+      unsigned int i_prev = (i == 0) ? f->degree() - 1 : i - 1;
+      unsigned int i_next = (i == f->degree() - 1) ? 0 : i + 1;
+
+      /* Save values for later retrieval. */
+      HalfedgeRef f_ip = f_i->next();
+
+      /* Adjust new face half_edge and neighbors. */
+      hn_lst[i]->set_neighbors(hn_lst[i_next], h_lst[i][0], vn_lst[i], e_lst[i][0], f_new);
+      // vn_lst[i]->pos = Vec3(f_i->vertex()->pos.x, f_i->vertex()->pos.y * 2, f_i->vertex()->pos.z); // DEBUG SIZE
+      vn_lst[i]->pos = f_i->vertex()->pos;
+      f_new->_halfedge = hn_lst[i];
+
+      /* Associate side face with first half_edge. */
+      f_lst[i]->_halfedge = h_lst[i][0];
+
+      /* Adjust side face half_edges. */
+
+      /* Top half-edge */
+      h_lst[i][0]->set_neighbors(h_lst[i][1], hn_lst[i], vn_lst[i_next], e_lst[i][0], f_lst[i]);
+      vn_lst[i_next]->_halfedge = h_lst[i][0];
+      e_lst[i][0]->_halfedge = h_lst[i][0];
+
+      /* Left half-edge */
+      h_lst[i][1]->set_neighbors(f_i, h_lst[i_prev][2], vn_lst[i], e_lst[i][1], f_lst[i]);
+      vn_lst[i]->_halfedge = h_lst[i][1];
+      e_lst[i][1]->_halfedge = h_lst[i][1];
+
+      /* Bottom half-edge */
+      f_i->set_neighbors(h_lst[i][2], f_i->twin(), f_i->vertex(), f_i->edge(), f_lst[i]);
+
+      /* Right half-edge */
+      h_lst[i][2]->set_neighbors(h_lst[i][0], h_lst[i_next][1], f_ip->vertex(), e_lst[i_next][1], f_lst[i]);
+      f_ip->vertex()->_halfedge = h_lst[i][2];
+      e_lst[i_next][1]->_halfedge = h_lst[i][2];
+
+      f_i = f_ip;
+    }
+    erase(f);
+    return f_new;
 }
 
 /*
@@ -471,11 +539,13 @@ void Halfedge_Mesh::bevel_face_positions(const std::vector<Vec3>& start_position
         h = h->next();
     } while(h != face->halfedge());
 
-    (void)new_halfedges;
-    (void)start_positions;
-    (void)face;
-    (void)tangent_offset;
-    (void)normal_offset;
+
+    for (size_t i = 0; i < new_halfedges.size(); i++) {
+      Vec3 tangent_vec = tangent_offset * face->center().unit();
+      new_halfedges[i]->vertex()->pos = start_positions[i] + tangent_vec;
+      Vec3 normal_vec = - normal_offset * face->normal().unit();
+      new_halfedges[i]->vertex()->pos = start_positions[i] + normal_vec;
+    }
 }
 
 /*
