@@ -545,6 +545,7 @@ void Halfedge_Mesh::triangulate() {
                 f->halfedge() = curr_he;
             }
         } while (curr_he != start_he);
+        validate();
     }
 }
 
