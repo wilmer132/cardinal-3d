@@ -676,16 +676,39 @@ void Halfedge_Mesh::triangulate() {
     centroids.
 */
 void Halfedge_Mesh::linear_subdivide_positions() {
-
     // For each vertex, assign Vertex::new_pos to
     // its original position, Vertex::pos.
+    VertexRef start_v = vertices_begin();
+    VertexRef end_v = vertices_end();
+    for (VertexRef v = start_v; v != end_v; v++) {
+        v->new_pos = v->pos;
+    }
 
     // For each edge, assign the midpoint of the two original
     // positions to Edge::new_pos.
+    EdgeRef start_e = edges_begin();
+    EdgeRef end_e = edges_end();
+    for (EdgeRef e = start_e; e != end_e; e++) {
+        HalfedgeRef first_he = e->halfedge();
+        HalfedgeRef second_he = first_he->twin();
+
+        /* Get both vertices to later get positions. */
+        VertexRef first_v = first_he->vertex();
+        VertexRef second_v = second_he->vertex();
+
+        Vec3 avg = (first_v->pos + second_v->pos) / 2;
+
+        e->new_pos = avg;
+    }
 
     // For each face, assign the centroid (i.e., arithmetic mean)
     // of the original vertex positions to Face::new_pos. Note
     // that in general, NOT all faces will be triangles!
+    FaceRef start_f = faces_begin();
+    FaceRef end_f = faces_end();
+    for (FaceRef f = start_f; f != end_f; f++) {
+        f->new_pos = f->center();
+    }
 }
 
 /*
@@ -707,10 +730,74 @@ void Halfedge_Mesh::catmullclark_subdivide_positions() {
     // rules. (These rules are outlined in the Developer Manual.)
 
     // Faces
+    FaceRef start_face = faces_begin();
+    FaceRef end_face = faces_end();
+    for (FaceRef f = start_face; f != end_face; f++) {
+        /* Similar to linear, just set them to their center. */
+        f->new_pos = f->center();
+    }
 
     // Edges
+    EdgeRef start_edge = edges_begin();
+    EdgeRef end_edge = edges_end();
+    for (EdgeRef e = start_edge; e != end_edge; e++) {
+        /* Grab edges and faces. */
+        HalfedgeRef he = e->halfedge();
+        HalfedgeRef he_twin = he->twin();
+        FaceRef f = he->face();
+        FaceRef f_twin = he_twin->face();
+
+        /* Grab specific positions of edges and faces. */
+        Vec3 he_pos = he->vertex()->pos;
+        Vec3 he_twin_pos = he_twin->vertex()->pos;
+        /* Use centers since those are our updated faces' positions. */
+        Vec3 f_pos = f->center();
+        Vec3 f_twin_pos = f_twin->center();
+
+
+        /* Calculate average and set value. */
+        Vec3 avg_pos = (he_pos + he_twin_pos + f_pos + f_twin_pos) / 4;
+        e->new_pos = avg_pos;
+    }
 
     // Vertices
+    VertexRef start_v = vertices_begin();
+    VertexRef end_v = vertices_end();
+    for (VertexRef v = start_v; v != end_v; v++) {
+        /* # of faces / edges. */
+        unsigned int n = v->degree();
+
+        /* Get counters for averages. */
+        Vec3 total_face_new_pos;
+        Vec3 total_edge_pos;
+
+        /* Set-up first edge. */
+        HalfedgeRef start_he = v->halfedge();
+        HalfedgeRef curr_he = start_he;
+
+        /* Loop over all edges and get totals for positions. */
+        do {
+            FaceRef curr_f = curr_he->face();
+            Vec3 curr_f_pos = curr_f->center();
+            total_face_new_pos += curr_f_pos;
+
+            Vec3 curr_e_center = curr_he->edge()->center();
+            total_edge_pos += curr_e_center;
+
+            curr_he = curr_he->twin()->next();
+        } while (curr_he != start_he);
+
+        /* Q is the average of all new face position for faces containing v. */
+        Vec3 Q = total_face_new_pos /= n;
+        /* R is the average of all original edge midpoints for edges containing v. */
+        Vec3 R = total_edge_pos /= n;
+        /* S is the original vertex position for vertex v. */
+        Vec3 S = v->pos;
+
+        /* New position is an average of averages. */
+        Vec3 v_new_pos = (Q + (2 * R) + ((n - 3) * S)) / n;
+        v->new_pos = v_new_pos;
+    }
 }
 
 /*
