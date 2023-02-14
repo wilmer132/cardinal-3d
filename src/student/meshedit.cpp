@@ -925,6 +925,39 @@ bool Halfedge_Mesh::simplify() {
     //    a quadric to the collapsed vertex, and to pop the collapsed edge off the
     //    top of the queue.
 
+    /* Loop through all faces in the shape. Build face_quadrics. */
+    for (FaceRef f = faces_begin(); f != faces_end(); f++) {
+      Mat4 f_quadric = Mat4(); // * Vec4(f->normal(), 1); /* plane equation? */
+      face_quadrics[f] = f_quadric;
+    }
+
+    /* Loop through all vertices in shape. Build vertex_quadrics. */
+    for (VertexRef v = vertices_begin(); v != vertices_end(); v++) {
+      /* Loop through current v's halfedges, and therefore faces. */
+      HalfedgeRef h_i = v->halfedge();
+      /* Start vertex quadric sum. */
+      Mat4 v_quadric = Mat4::Zero;
+      do {
+        /* Retrieve face, add sum. */
+        v_quadric += face_quadrics[h_i->face()];
+        h_i = h_i->twin()->next();
+      } while (h_i != v->halfedge());
+      /* Vertex quadric sum computed. Add to map. */
+      vertex_quadrics[v] = v_quadric;
+    }
+
+    /* Loop through all edges in shape. Build edge_queue based on edge_records. */
+    for (EdgeRef e = edges_begin(); e != edges_end(); e++) {
+      Edge_Record e_r(vertex_quadrics, e);
+      edge_queue.insert(e_r);
+    }
+
+    /* Collapse edges until size_target is reached. */
+    size_t size_target = edge_queue.size() / 4;
+    // while (edge_queue.size() > size_target) {
+    //   /* TODO: Collapsing of edges. */
+    // }
+    
     // Note: if you erase elements in a local operation, they will not be actually deleted
     // until do_erase or validate are called. This is to facilitate checking
     // for dangling references to elements that will be erased.
