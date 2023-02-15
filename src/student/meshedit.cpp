@@ -1107,7 +1107,7 @@ bool Halfedge_Mesh::simplify() {
         /* Continue with side two*/
         if (hv_t->edge() != e_best.edge) e_connected.push_back(hv_t->edge());
         hv_t = hv_t->twin()->next();
-      } while (hv != v->halfedge());
+      } while (hv_t != v_t->halfedge());
 
       /* Remove edges from priority queue. */
       for (EdgeRef e_curr : e_connected) {
@@ -1120,6 +1120,7 @@ bool Halfedge_Mesh::simplify() {
       if (!collapse_result.has_value()) return false;
 
       VertexRef v_collapsed = collapse_result.value(); /* Potential ERROR HERE.*/
+
       /* Update vertex quadric. */ /* TODO: Remove deleted vertex from map?*/
       vertex_quadrics[v_collapsed] = vn_quadric;
 
