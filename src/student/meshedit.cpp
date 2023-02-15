@@ -892,6 +892,47 @@ struct Edge_Record {
         //    Edge_Record::optimal.
         // -> Also store the cost associated with collapsing this edge in
         //    Edge_Record::cost.
+
+        /* Double check collapse_edge*/ /* TODO: BUG HERE! */
+        /**
+         * Reasons: 1) key may not exist; never added to map before
+         * 2) way we are creating the key; maybe one vertex may/may-not exist
+        */
+        Mat4 e_quadric = vertex_quadrics[e->halfedge()->vertex()] +
+          vertex_quadrics[e->halfedge()->twin()->vertex()];
+
+        /* Copy of quadric - set last column and last row and col and update*/
+        Mat4 A = Mat4(
+                  Vec4(e_quadric[0].xyz(), 0), 
+                  Vec4(e_quadric[1].xyz(), 0), 
+                  Vec4(e_quadric[2].xyz(), 0), 
+                  Vec4(Vec3(), 1));
+        
+        Vec3 n_optimal;
+        float n_cost;
+        if (A.det() == 0) { /* Non-invertible if det is zero. */
+          /* If inverse does not exist, cost function is minimized outside
+          vertices of edge - point along edge beyond two vertices.
+          i.e. our optimum point must lie at one of the vertices. TODO: Compute
+          cost for both vertices, and choose the one with lower cost. */
+          float cost_one = dot(Vec4(e->halfedge()->vertex()->pos, 1), 
+            e_quadric * Vec4(e->halfedge()->vertex()->pos, 1));
+          float cost_two = dot(Vec4(e->halfedge()->twin()->vertex()->pos, 1), 
+            e_quadric * Vec4(e->halfedge()->twin()->vertex()->pos, 1));
+          n_optimal = (cost_one < cost_two) ? 
+            e->halfedge()->vertex()->pos : 
+            e->halfedge()->twin()->vertex()->pos;
+          n_cost = (cost_one < cost_two) ? cost_one : cost_two;
+        } else {
+          Vec3 b = -e_quadric[3].xyz();
+          n_optimal = A.inverse() * b;
+          n_cost = dot(Vec4(n_optimal, 1), e_quadric * Vec4(n_optimal, 1)); /* x^T Kx*/
+        }
+
+        /*Store information. */
+        this->optimal = n_optimal;
+        this->cost = n_cost;
+        this->edge = e;
     }
     Halfedge_Mesh::EdgeRef edge;
     Vec3 optimal;
@@ -1014,7 +1055,9 @@ bool Halfedge_Mesh::simplify() {
 
     /* Loop through all faces in the shape. Build face_quadrics. */
     for (FaceRef f = faces_begin(); f != faces_end(); f++) {
-      Mat4 f_quadric = Mat4(); // * Vec4(f->normal(), 1); /* plane equation? */
+      /* Face quadric: outer(V4(normal.x,y,z, d = negative dot (N = face normal, p = any point of face)), V4)*/
+      Vec4 f_vec = Vec4(f->normal(), dot(f->normal(), f->center()));
+      Mat4 f_quadric = outer(f_vec, f_vec);
       face_quadrics[f] = f_quadric;
     }
 
@@ -1033,17 +1076,63 @@ bool Halfedge_Mesh::simplify() {
       vertex_quadrics[v] = v_quadric;
     }
 
-    /* Loop through all edges in shape. Build edge_queue based on edge_records. */
+    /* Loop through all edges in shape. Build edge_queue and edge_records. */
     for (EdgeRef e = edges_begin(); e != edges_end(); e++) {
       Edge_Record e_r(vertex_quadrics, e);
+      edge_records[e] = e_r;
       edge_queue.insert(e_r);
     }
 
     /* Collapse edges until size_target is reached. */
     size_t size_target = edge_queue.size() / 4;
-    // while (edge_queue.size() > size_target) {
-    //   /* TODO: Collapsing of edges. */
-    // }
+    while (edge_queue.size() > size_target) { /* BUG: check size in edge_queue? */
+      /* Minimum-priority queue. Method top retrieves edge with smallest cost. */
+      Edge_Record e_best = edge_queue.top();
+      /* Compute combined quadrics for new vertex. */
+      Mat4 vn_quadric = vertex_quadrics[e_best.edge->halfedge()->vertex()] +
+          vertex_quadrics[e_best.edge->halfedge()->twin()->vertex()];
+      
+      /* Collect all edges connected to the edge-to-collapse. */
+      vector<EdgeRef> e_connected;
+      VertexRef v = e_best.edge->halfedge()->vertex(); /*Side one*/
+      VertexRef v_t = e_best.edge->halfedge()->twin()->vertex(); /*Side two*/
+      HalfedgeRef hv = v->halfedge();
+      HalfedgeRef hv_t = v_t->halfedge();
+      do {
+        /* Start with side one*/
+        if (hv->edge() != e_best.edge) e_connected.push_back(hv->edge());
+        hv = hv->twin()->next();
+      } while (hv != v->halfedge());
+      do {
+        /* Continue with side two*/
+        if (hv_t->edge() != e_best.edge) e_connected.push_back(hv_t->edge());
+        hv_t = hv_t->twin()->next();
+      } while (hv != v->halfedge());
+
+      /* Remove edges from priority queue. */
+      for (EdgeRef e_curr : e_connected) {
+        edge_queue.remove(edge_records[e_curr]);
+      }
+      
+      /* Collapse edges. */
+      auto collapse_result = collapse_edge_erase(e_best.edge);
+      /* No value for collapsed edge. Can't simplify. Return false. */
+      if (!collapse_result.has_value()) return false;
+
+      VertexRef v_collapsed = collapse_result.value(); /* Potential ERROR HERE.*/
+      /* Update vertex quadric. */ /* TODO: Remove deleted vertex from map?*/
+      vertex_quadrics[v_collapsed] = vn_quadric;
+
+      /* Add edges to priority queue post_collapse. */
+      for (EdgeRef e_curr : e_connected) { /* BUG HERE */
+        Edge_Record new_record(vertex_quadrics, e_curr);
+        edge_records[e_curr] = new_record;
+        edge_queue.insert(new_record);
+      }
+
+      /* Remove chosen top edge from priority queue. */
+      edge_queue.remove(e_best);
+    }
     
     // Note: if you erase elements in a local operation, they will not be actually deleted
     // until do_erase or validate are called. This is to facilitate checking
@@ -1052,5 +1141,5 @@ bool Halfedge_Mesh::simplify() {
     // but here simply calling collapse_edge() will not erase the elements.
     // You should use collapse_edge_erase() instead for the desired behavior.
 
-    return false;
+    return true;
 }
