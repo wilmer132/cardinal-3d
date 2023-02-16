@@ -58,105 +58,106 @@ std::optional<Halfedge_Mesh::FaceRef> Halfedge_Mesh::erase_edge(Halfedge_Mesh::E
     the new vertex created by the collapse.
 */
 std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Mesh::EdgeRef e) {
-    /* Center is new location. */
-    Vec3 center = e->center();
+  /* Define variables for implementation*/
+  VertexRef v = e->halfedge()->vertex(); /* Main vertex. */
+  VertexRef v_t = e->halfedge()->twin()->vertex(); /* Twin vertex. */
+  FaceRef f = e->halfedge()->face(); /* Edge face. */
+  FaceRef f_t = e->halfedge()->twin()->face(); /* Twin face. */
 
-    /* Shift first vertex towards the center. */
-    HalfedgeRef edge_he = e->halfedge();
-    VertexRef centered_v = edge_he->vertex();
-    centered_v->pos = center;
+  /* Shift v to center. */
+  v->pos = e->center();
 
-    /* Get information for opposite side / vertex. */
-    HalfedgeRef edge_he_twin = edge_he->twin();
-    VertexRef opposite_v = edge_he_twin->vertex();
-    HalfedgeRef opposite_v_he = opposite_v->halfedge();
+  /* Collect face half-edges for deletion later. */
+  vector<HalfedgeRef> f_he;
+  vector<HalfedgeRef> f_t_he;
+  HalfedgeRef h_c; /*half-edge connect. */
+  HalfedgeRef h_t_c; /*half-edge connect. */
+  HalfedgeRef h_i = f->halfedge(); /* Iterator half-edge. */
+  do {
+    f_he.push_back(h_i);
+    if (h_i->next() == e->halfedge()) h_c = h_i;
+    h_i = h_i->next();
+  } while (h_i != f->halfedge());
 
-    /* Get first two faces to save for later. */
-    FaceRef top_face = edge_he->face();
-    FaceRef bottom_face = edge_he_twin->face();
+  h_i = f_t->halfedge();
+  do {
+    f_t_he.push_back(h_i);
+    if (h_i->next() == e->halfedge()->twin()) h_t_c = h_i;
+    h_i = h_i->next();
+  } while (h_i != f_t->halfedge());
 
-    /* Get half-edges from faces that we will delete later. */
-    std::set<HalfedgeRef> top_face_halfedges;
-    HalfedgeRef starting_he_top = top_face->halfedge();
-    HalfedgeRef curr_he_top = starting_he_top;
+    // /* Get twins that we will need to rewire later. */
+    // bool have_zero_area = (top_face_halfedges.size() == 3);
+    // vector<HalfedgeRef> top_twins;
+    // EdgeRef top_edge_to_delete, top_edge_to_keep;
+    // vector<HalfedgeRef> bottom_twins;
+    // EdgeRef bot_edge_to_delete, bot_edge_to_keep;
+    // if(have_zero_area) {
+    //     top_twins.push_back(edge_he->next()->twin());
+    //     top_twins.push_back(edge_he->next()->next()->twin());
+    //     top_edge_to_keep = edge_he->next()->twin()->edge();
+    //     top_edge_to_delete = edge_he->next()->next()->twin()->edge();
+
+    //     bottom_twins.push_back(edge_he_twin->next()->twin());
+    //     bottom_twins.push_back(edge_he_twin->next()->next()->twin());
+    //     bot_edge_to_keep = edge_he_twin->next()->twin()->edge();
+    //     bot_edge_to_delete = edge_he_twin->next()->next()->twin()->edge();
+    // }
+
+    /* Half-edges pointing at v_t to point to v. */
+    h_i = e->halfedge()->twin();
     do {
-        top_face_halfedges.insert(curr_he_top);
-        curr_he_top = curr_he_top->next();
-    } while(curr_he_top != starting_he_top);
+      h_i->_vertex = v;
+      h_i = h_i->twin()->next();
+    } while (h_i != e->halfedge()->twin());
 
-    std::set<HalfedgeRef> bottom_face_halfedges;
-    HalfedgeRef starting_he_bot = bottom_face->halfedge();
-    HalfedgeRef curr_he_bot = starting_he_bot;
-    do {
-        bottom_face_halfedges.insert(curr_he_bot);
-        curr_he_bot = curr_he_bot->next();
-    } while(curr_he_bot != starting_he_bot);
+    /* Assign v's half edge to its next vertex. */ /*Assumes half-edge will NOT be deleted. */
+    v->_halfedge = e->halfedge()->twin()->next();
 
-    /* Get twins that we will need to rewire later. */
-    bool have_zero_area = (top_face_halfedges.size() == 3);
-    vector<HalfedgeRef> top_twins;
-    EdgeRef top_edge_to_delete, top_edge_to_keep;
-    vector<HalfedgeRef> bottom_twins;
-    EdgeRef bot_edge_to_delete, bot_edge_to_keep;
-    if(have_zero_area) {
-        top_twins.push_back(edge_he->next()->twin());
-        top_twins.push_back(edge_he->next()->next()->twin());
-        top_edge_to_keep = edge_he->next()->twin()->edge();
-        top_edge_to_delete = edge_he->next()->next()->twin()->edge();
-
-        bottom_twins.push_back(edge_he_twin->next()->twin());
-        bottom_twins.push_back(edge_he_twin->next()->next()->twin());
-        bot_edge_to_keep = edge_he_twin->next()->twin()->edge();
-        bot_edge_to_delete = edge_he_twin->next()->next()->twin()->edge();
-    }
-
-    /* Move half-edges that are pointing at second vertex to point to center spot. */
-    HalfedgeRef start_he_shift = opposite_v->halfedge();
-    HalfedgeRef curr_he_shift = start_he_shift;
-    do {
-        HalfedgeRef temp = curr_he_shift->twin()->next();
-        curr_he_shift->_vertex = centered_v;
-        curr_he_shift = temp;
-    } while(curr_he_shift != start_he_shift);
-
-    centered_v->_halfedge = opposite_v_he;
-
-    /* If there is a zero area face, rewire and erase appropriately. */
-    if (have_zero_area) {
-        HalfedgeRef adj_he_top = top_twins[0];
-        HalfedgeRef opp_he_top = top_twins[1];
-        adj_he_top->set_neighbors(adj_he_top->next(), opp_he_top, adj_he_top->vertex(), top_edge_to_keep, adj_he_top->face());
-        adj_he_top->vertex()->_halfedge = adj_he_top;
-        opp_he_top->set_neighbors(opp_he_top->next(), adj_he_top, centered_v, top_edge_to_keep, opp_he_top->face());
-        top_edge_to_keep->_halfedge = adj_he_top;
+    // /* If there is a zero area face, rewire and erase appropriately. */
+    // if (have_zero_area) {
+    //     HalfedgeRef adj_he_top = top_twins[0];
+    //     HalfedgeRef opp_he_top = top_twins[1];
+    //     adj_he_top->set_neighbors(adj_he_top->next(), opp_he_top, adj_he_top->vertex(), top_edge_to_keep, adj_he_top->face());
+    //     adj_he_top->vertex()->_halfedge = adj_he_top;
+    //     opp_he_top->set_neighbors(opp_he_top->next(), adj_he_top, centered_v, top_edge_to_keep, opp_he_top->face());
+    //     top_edge_to_keep->_halfedge = adj_he_top;
         
-        HalfedgeRef adj_he_bot = bottom_twins[0];
-        HalfedgeRef opp_he_bot = bottom_twins[1];
-        adj_he_bot->set_neighbors(adj_he_bot->next(), opp_he_bot, adj_he_bot->vertex(), bot_edge_to_keep, adj_he_bot->face());
-        adj_he_bot->vertex()->_halfedge = adj_he_bot;
-        opp_he_bot->set_neighbors(opp_he_bot->next(), adj_he_bot, centered_v, bot_edge_to_keep, opp_he_bot->face());
-        bot_edge_to_keep->_halfedge = adj_he_bot;
+    //     HalfedgeRef adj_he_bot = bottom_twins[0];
+    //     HalfedgeRef opp_he_bot = bottom_twins[1];
+    //     adj_he_bot->set_neighbors(adj_he_bot->next(), opp_he_bot, adj_he_bot->vertex(), bot_edge_to_keep, adj_he_bot->face());
+    //     adj_he_bot->vertex()->_halfedge = adj_he_bot;
+    //     opp_he_bot->set_neighbors(opp_he_bot->next(), adj_he_bot, centered_v, bot_edge_to_keep, opp_he_bot->face());
+    //     bot_edge_to_keep->_halfedge = adj_he_bot;
 
-        erase(top_face);
-        for(HalfedgeRef h : top_face_halfedges) {
-            erase(h);
-        }
+    //     erase(top_face);
+    //     for(HalfedgeRef h : top_face_halfedges) {
+    //         erase(h);
+    //     }
 
-        erase(bottom_face);
-        for(HalfedgeRef h : bottom_face_halfedges) {
-            erase(h);
-        }
+    //     erase(bottom_face);
+    //     for(HalfedgeRef h : bottom_face_halfedges) {
+    //         erase(h);
+    //     }
 
-        erase(top_edge_to_delete);
-        erase(bot_edge_to_delete);
-    }
+    //     erase(top_edge_to_delete);
+    //     erase(bot_edge_to_delete);
+    // }
 
+    /* Adjust values prior to erasing. */
+    h_c->set_neighbors(h_c->next()->next(), h_c->twin(), h_c->vertex(), h_c->edge(), h_c->face());
+    h_t_c->set_neighbors(h_t_c->next()->next(), h_t_c->twin(), h_t_c->vertex(), h_t_c->edge(), h_t_c->face());
+    f->_halfedge = h_c;
+    f_t->_halfedge = h_t_c;
+
+    erase(e->halfedge());
+    erase(e->halfedge()->twin());
     erase(e);
-    erase(opposite_v);
+    erase(v_t);
 
     validate();
 
-    return centered_v;
+    return v;
 }
 
 /*
