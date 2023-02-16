@@ -86,78 +86,87 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
     h_i = h_i->next();
   } while (h_i != f_t->halfedge());
 
-    // /* Get twins that we will need to rewire later. */
-    // bool have_zero_area = (top_face_halfedges.size() == 3);
-    // vector<HalfedgeRef> top_twins;
-    // EdgeRef top_edge_to_delete, top_edge_to_keep;
-    // vector<HalfedgeRef> bottom_twins;
-    // EdgeRef bot_edge_to_delete, bot_edge_to_keep;
-    // if(have_zero_area) {
-    //     top_twins.push_back(edge_he->next()->twin());
-    //     top_twins.push_back(edge_he->next()->next()->twin());
-    //     top_edge_to_keep = edge_he->next()->twin()->edge();
-    //     top_edge_to_delete = edge_he->next()->next()->twin()->edge();
+  /* Half-edges pointing at v_t to point to v. */
+  h_i = e->halfedge()->twin();
+  do {
+    h_i->_vertex = v;
+    h_i = h_i->twin()->next();
+  } while (h_i != e->halfedge()->twin());
 
-    //     bottom_twins.push_back(edge_he_twin->next()->twin());
-    //     bottom_twins.push_back(edge_he_twin->next()->next()->twin());
-    //     bot_edge_to_keep = edge_he_twin->next()->twin()->edge();
-    //     bot_edge_to_delete = edge_he_twin->next()->next()->twin()->edge();
-    // }
+  /* Assign v's half edge to its next vertex. */ /*Assumes half-edge will NOT be deleted. */
+  v->_halfedge = e->halfedge()->twin()->next();
 
-    /* Half-edges pointing at v_t to point to v. */
-    h_i = e->halfedge()->twin();
+  /* Collapse of face with degree 3 must be erased. */
+  if (f_he.size() == 3) {
+
+    HalfedgeRef s_h_t = e->halfedge()->next()->twin(); /*second inner half-edge twin. */
+    HalfedgeRef l_h_t = e->halfedge()->next()->next()->twin(); /*last inner half-edge twin. */
+    EdgeRef s_e = s_h_t->edge();
+
+    /*Adjust half-egdes prior to erasing. */
+    l_h_t->set_neighbors(l_h_t->next(), s_h_t, l_h_t->vertex(), l_h_t->edge(), l_h_t->face());
+    l_h_t->vertex()->_halfedge = l_h_t;
+    l_h_t->edge()->_halfedge = l_h_t;
+    s_h_t->set_neighbors(s_h_t->next(), l_h_t, s_h_t->vertex(), l_h_t->edge(), s_h_t->face());
+    s_h_t->vertex()->_halfedge = s_h_t;
+    s_h_t->edge()->_halfedge = s_h_t;
+
+    /*Delete second edge*/
+    erase(s_e);
+    /*Delete face*/
+    erase(f);
+    /*Delete inner half edges except main. */
+    h_i = e->halfedge(); /*first inner half-edge. */
     do {
-      h_i->_vertex = v;
-      h_i = h_i->twin()->next();
+      HalfedgeRef to_del = h_i;
+      h_i = h_i->next();
+      if (to_del != e->halfedge()) erase(to_del);
+    } while (h_i != e->halfedge());
+  }
+  /* Check procedure for bottom face. */
+  if (f_t_he.size() == 3) {
+    /* Due to bottom nature, we must preserve side of v. */
+    HalfedgeRef s_h_t = e->halfedge()->twin()->next()->twin(); /*second inner half-edge twin. */
+    HalfedgeRef l_h_t = e->halfedge()->twin()->next()->next()->twin(); /*last inner half-edge twin. */
+    EdgeRef l_e = l_h_t->edge();
+
+    /*Adjust half-egdes prior to erasing. */
+    s_h_t->set_neighbors(s_h_t->next(), l_h_t, s_h_t->vertex(), s_h_t->edge(), s_h_t->face());
+    s_h_t->vertex()->_halfedge = s_h_t;
+    s_h_t->edge()->_halfedge = s_h_t;
+    l_h_t->set_neighbors(l_h_t->next(), s_h_t, l_h_t->vertex(), s_h_t->edge(), l_h_t->face());
+    l_h_t->vertex()->_halfedge = l_h_t;
+    l_h_t->edge()->_halfedge = l_h_t;
+
+    /*Delete second edge*/
+    erase(l_e);
+    /*Delete face*/
+    erase(f_t);
+    /*Delete inner half edges except main. */
+    h_i = e->halfedge()->twin(); /*first inner half-edge. */
+    do {
+      HalfedgeRef to_del = h_i;
+      h_i = h_i->next();
+      if (to_del != e->halfedge()) erase(to_del);
     } while (h_i != e->halfedge()->twin());
+  }
 
-    /* Assign v's half edge to its next vertex. */ /*Assumes half-edge will NOT be deleted. */
-    v->_halfedge = e->halfedge()->twin()->next();
-
-    // /* If there is a zero area face, rewire and erase appropriately. */
-    // if (have_zero_area) {
-    //     HalfedgeRef adj_he_top = top_twins[0];
-    //     HalfedgeRef opp_he_top = top_twins[1];
-    //     adj_he_top->set_neighbors(adj_he_top->next(), opp_he_top, adj_he_top->vertex(), top_edge_to_keep, adj_he_top->face());
-    //     adj_he_top->vertex()->_halfedge = adj_he_top;
-    //     opp_he_top->set_neighbors(opp_he_top->next(), adj_he_top, centered_v, top_edge_to_keep, opp_he_top->face());
-    //     top_edge_to_keep->_halfedge = adj_he_top;
-        
-    //     HalfedgeRef adj_he_bot = bottom_twins[0];
-    //     HalfedgeRef opp_he_bot = bottom_twins[1];
-    //     adj_he_bot->set_neighbors(adj_he_bot->next(), opp_he_bot, adj_he_bot->vertex(), bot_edge_to_keep, adj_he_bot->face());
-    //     adj_he_bot->vertex()->_halfedge = adj_he_bot;
-    //     opp_he_bot->set_neighbors(opp_he_bot->next(), adj_he_bot, centered_v, bot_edge_to_keep, opp_he_bot->face());
-    //     bot_edge_to_keep->_halfedge = adj_he_bot;
-
-    //     erase(top_face);
-    //     for(HalfedgeRef h : top_face_halfedges) {
-    //         erase(h);
-    //     }
-
-    //     erase(bottom_face);
-    //     for(HalfedgeRef h : bottom_face_halfedges) {
-    //         erase(h);
-    //     }
-
-    //     erase(top_edge_to_delete);
-    //     erase(bot_edge_to_delete);
-    // }
-
-    /* Adjust values prior to erasing. */
+  /* Adjust values prior to erasing. */
+  if (f_he.size() != 3) 
     h_c->set_neighbors(h_c->next()->next(), h_c->twin(), h_c->vertex(), h_c->edge(), h_c->face());
+  if (f_t_he.size() != 3)
     h_t_c->set_neighbors(h_t_c->next()->next(), h_t_c->twin(), h_t_c->vertex(), h_t_c->edge(), h_t_c->face());
-    f->_halfedge = h_c;
-    f_t->_halfedge = h_t_c;
+  f->_halfedge = h_c;
+  f_t->_halfedge = h_t_c;
 
-    erase(e->halfedge());
-    erase(e->halfedge()->twin());
-    erase(e);
-    erase(v_t);
+  erase(e->halfedge());
+  erase(e->halfedge()->twin());
+  erase(e);
+  erase(v_t);
 
-    validate();
+  validate();
 
-    return v;
+  return v;
 }
 
 /*
