@@ -164,8 +164,6 @@ std::optional<Halfedge_Mesh::VertexRef> Halfedge_Mesh::collapse_edge(Halfedge_Me
   erase(e);
   erase(v_t);
 
-  validate();
-
   return v;
 }
 
@@ -940,9 +938,9 @@ struct Edge_Record {
         }
 
         /*Store information. */
-        optimal = n_optimal;
-        cost = n_cost;
-        edge = e;
+        this->optimal = n_optimal;
+        this->cost = n_cost;
+        this->edge = e;
     }
     Halfedge_Mesh::EdgeRef edge;
     Vec3 optimal;
@@ -1071,8 +1069,6 @@ bool Halfedge_Mesh::simplify() {
       face_quadrics[f] = f_quadric;
     }
 
-    printf("face_quadrics has %zu items.\n", face_quadrics.size());
-
     /* Loop through all vertices in shape. Build vertex_quadrics. */
     for (VertexRef v = vertices_begin(); v != vertices_end(); v++) {
       /* Loop through current v's halfedges, and therefore faces. */
@@ -1088,8 +1084,6 @@ bool Halfedge_Mesh::simplify() {
       vertex_quadrics[v] = v_quadric;
     }
 
-    printf("vertex_quadrics has %zu items.\n", vertex_quadrics.size());
-
     /* Loop through all edges in shape. Build edge_queue and edge_records. */
     for (EdgeRef e = edges_begin(); e != edges_end(); e++) {
       Edge_Record e_r(vertex_quadrics, e);
@@ -1097,7 +1091,29 @@ bool Halfedge_Mesh::simplify() {
       edge_queue.insert(e_r);
     }
 
-    printf("edge_quadrics has %zu items.\n", edge_queue.size());
+    /* Best edge can collapse only if intersection of vertex neighbors is exactly two*/
+    Edge_Record e_check = edge_queue.top();
+    VertexRef v_check = e_check.edge->halfedge()->vertex(); /*Side one*/
+    VertexRef v_t_check = e_check.edge->halfedge()->twin()->vertex(); /*Side two*/
+    set<VertexRef> v_set = {v_check};
+    set<VertexRef> v_t_set = {v_t_check};
+    set<VertexRef> v_intersect;
+    HalfedgeRef hv_i = v_check->halfedge();
+    do {
+      v_set.insert(hv_i->twin()->vertex());
+      hv_i = hv_i->twin()->next();
+    } while (hv_i != v_check->halfedge());
+
+    hv_i = v_t_check->halfedge();
+    do {
+      v_t_set.insert(hv_i->twin()->vertex());
+      hv_i = hv_i->twin()->next();
+    } while (hv_i != v_t_check->halfedge());
+
+    set_intersection(v_set.begin(), v_set.end(), v_t_set.begin(), v_t_set.end(),
+      inserter(v_intersect, v_intersect.begin()));
+    
+    if (n_vertices() <= 3 && v_intersect.size() != 2) return false;
 
     /* Collapse edges until size_target is reached. */
     size_t size_target = edge_queue.size() / 4;
@@ -1107,6 +1123,7 @@ bool Halfedge_Mesh::simplify() {
       /* Compute combined quadrics for new vertex. */
       VertexRef v = e_best.edge->halfedge()->vertex(); /*Side one*/
       VertexRef v_t = e_best.edge->halfedge()->twin()->vertex(); /*Side two*/
+
       Mat4 vn_quadric = vertex_quadrics[v] + vertex_quadrics[v_t];
       
       /* Collect all edges connected to the edge-to-collapse. */
@@ -1135,6 +1152,8 @@ bool Halfedge_Mesh::simplify() {
       /* Remove all erased edges from priority queue. */
       for (EdgeRef e_erased : eerased) {
         edge_queue.remove(edge_records[e_erased]);
+        if (find(e_connected.begin(), e_connected.end(), e_erased) != e_connected.end())
+          e_connected.erase(find(e_connected.begin(), e_connected.end(), e_erased));
       }
       do_erase();
 
@@ -1148,14 +1167,12 @@ bool Halfedge_Mesh::simplify() {
 
       /* Add edges to priority queue post_collapse. */
       for (EdgeRef e_curr : e_connected) { /* BUG HERE */
-        Edge_Record new_record(vertex_quadrics, e_curr);
+        Edge_Record new_record = Edge_Record(vertex_quadrics, e_curr);
         edge_records[e_curr] = new_record;
         edge_queue.insert(new_record);
       }
 
       edge_queue.pop();
-
-      printf("Final count is %zu edges in priority queue.\n", edge_queue.size());
     }
     
     // Note: if you erase elements in a local operation, they will not be actually deleted
