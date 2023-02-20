@@ -12,8 +12,31 @@ BBox Triangle::bbox() const {
 
     // Beware of flat/zero-volume boxes! You may need to
     // account for that here, or later on in BBox::intersect
+    
+    float x_min = std::min({vertex_list[v0].position.x,
+                           vertex_list[v1].position.x,
+                           vertex_list[v2].position.x});
+    float y_min = std::min({vertex_list[v0].position.y,
+                           vertex_list[v1].position.y,
+                           vertex_list[v2].position.y});
+    float z_min = std::min({vertex_list[v0].position.z,
+                           vertex_list[v1].position.z,
+                           vertex_list[v2].position.z});
 
-    BBox box;
+    float x_max = std::max({vertex_list[v0].position.x,
+                           vertex_list[v1].position.x,
+                           vertex_list[v2].position.x});
+    float y_max = std::max({vertex_list[v0].position.y,
+                           vertex_list[v1].position.y,
+                           vertex_list[v2].position.y});
+    float z_max = std::max({vertex_list[v0].position.z,
+                           vertex_list[v1].position.z,
+                           vertex_list[v2].position.z});
+
+    Vec3 vec_min(x_min, y_min, z_min);
+    Vec3 vec_max(x_max, y_max, z_max);
+
+    BBox box(vec_min, vec_max);
     return box;
 }
 
