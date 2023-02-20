@@ -1,5 +1,6 @@
 
 #include "../rays/tri_mesh.h"
+#include "lib/mat4.h"
 #include "debug.h"
 
 namespace PT {
@@ -25,24 +26,46 @@ Trace Triangle::hit(const Ray& ray) const {
     Tri_Mesh_Vert v_1 = vertex_list[v1];
     Tri_Mesh_Vert v_2 = vertex_list[v2];
 
-    // here just to avoid unused variable warnings, students should remove the following three lines.
-    (void)v_0;
-    (void)v_1;
-    (void)v_2;
     
-    // TODO (PathTracer): Task 2
+    // (PathTracer): Task 2
     // Intersect this ray with a triangle defined by the above three points.
     // Intersection should yield a ray t-value, and a hit point (u,v) on the surface of the triangle
 
+    // Define barycentric weights
+    Vec4 e_1 = Vec4(v_1.position - v_0.position, 0);
+    Vec4 e_2 = Vec4(v_2.position - v_0.position, 0);
+    Vec4 s = Vec4(ray.point - v_0.position, 0);
+    Vec4 d = Vec4(ray.dir, 0);
+
+
+    // Use Cramer's Rule
+    Vec3 soln = ( 1 / Mat4(e_1, e_2, -d, Vec4()).det()) *
+                Vec3(Mat4(s, e_2, -d, Vec4()).det(),
+                     Mat4(e_1, s, -d, Vec4()).det(),
+                     Mat4(e_1, e_2, s, Vec4()).det());
+
     // You'll need to fill in a "Trace" struct describing information about the hit (or lack of hit)
+    float u = soln.x;
+    float v = soln.y;
+    float t = soln.z;
 
     Trace ret;
     ret.origin = ray.point;
-    ret.hit = false;       // was there an intersection?
-    ret.distance = 0.0f;   // at what distance did the intersection occur?
-    ret.position = Vec3{}; // where was the intersection?
-    ret.normal = Vec3{};   // what was the surface normal at the intersection?
-                           // (this should be interpolated between the three vertex normals)
+    ret.hit = (u > 0 &&
+               v > 0 &&
+               t > ray.dist_bounds.x &&
+               t < ray.dist_bounds.y);          // intersection
+    if (ret.hit) {
+      ret.distance = t;                         // distance
+      ret.position = (ray.dir * t) + ray.point; // position
+      ret.normal = (v_0.normal +
+                    v_1.normal +
+                    v_2.normal) / 3;            // vertex-interpolated normal
+
+      // update ray dist_bounds
+      ray.dist_bounds = Vec2(ray.dist_bounds.x, t);
+    }
+
     return ret;
 }
 
