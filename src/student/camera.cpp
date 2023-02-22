@@ -16,10 +16,8 @@ Ray Camera::generate_ray(Vec2 screen_coord) const {
     // You'll need to compute this position based on the vertial field of view
     // (vert_fov) of the camera, and the aspect ratio of the output image (aspect_ratio).
     //
-    // Tip: compute the ray direction in view space and use
-    // the camera space to world space transform (iview) to transform the ray back into world space.
+    // Tip: compute the ray direction in view space and useamera space to world space transform (iview) to transform the ray back into world space.
     // the camera transform to transform it back into world space.
-    
     // Create ray origin
     Vec3 origin(position);
     
@@ -34,5 +32,6 @@ Ray Camera::generate_ray(Vec2 screen_coord) const {
 
     // Construct ray
     Ray out(origin, dir);
+
     return out;
 }
