@@ -55,17 +55,18 @@ Trace Triangle::hit(const Ray& ray) const {
     // Intersection should yield a ray t-value, and a hit point (u,v) on the surface of the triangle
 
     // Define barycentric weights
-    Vec4 e_1 = Vec4(v_1.position - v_0.position, 0);
-    Vec4 e_2 = Vec4(v_2.position - v_0.position, 0);
-    Vec4 s = Vec4(ray.point - v_0.position, 0);
-    Vec4 d = Vec4(ray.dir, 0);
-
+    Vec3 e_1 = v_1.position - v_0.position;
+    Vec3 e_2 = v_2.position - v_0.position;
+    Vec3 s = ray.point - v_0.position;
+    Vec3 d = ray.dir;
 
     // Use Cramer's Rule
-    Vec3 soln = ( 1 / Mat4(e_1, e_2, -d, Vec4()).det()) *
-                Vec3(Mat4(s, e_2, -d, Vec4()).det(),
-                     Mat4(e_1, s, -d, Vec4()).det(),
-                     Mat4(e_1, e_2, s, Vec4()).det());
+    float frac = 1 / (dot(cross(e_1, d), e_2));
+    float det_x = dot(-cross(s, e_2), d);
+    float det_y = dot(cross(e_1, d), s);
+    float det_z = dot(-cross(s, e_2), e_1);
+
+    Vec3 soln = frac * Vec3(det_x, det_y, det_z);
 
     // You'll need to fill in a "Trace" struct describing information about the hit (or lack of hit)
     float u = soln.x;
@@ -73,17 +74,19 @@ Trace Triangle::hit(const Ray& ray) const {
     float t = soln.z;
 
     Trace ret;
-    ret.origin = ray.point;
+    // ret.origin = ray.point;
     ret.hit = (u > 0 &&
                v > 0 &&
+               (u + v) <= 1 &&
                t > ray.dist_bounds.x &&
                t < ray.dist_bounds.y);          // intersection
     if (ret.hit) {
       ret.distance = t;                         // distance
       ret.position = (ray.dir * t) + ray.point; // position
-      ret.normal = (v_0.normal +
-                    v_1.normal +
-                    v_2.normal) / 3;            // vertex-interpolated normal
+
+      // vertex-interpolated normal
+      Vec3 n_total = ((1 - u - v) * v_0.normal + u * v_1.normal + v * v_2.normal).unit();
+      ret.normal = n_total;
 
       // update ray dist_bounds
       ray.dist_bounds = Vec2(ray.dist_bounds.x, t);

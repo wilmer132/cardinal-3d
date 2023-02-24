@@ -31,8 +31,6 @@ Spectrum Pathtracer::trace_pixel(size_t x, size_t y) {
     Vec2 xy_uni((float)((x + xy_sample.x) / out_w), 
                 (float)((y + xy_sample.y) / out_h));
     Ray out = camera.generate_ray(xy_uni);
-
-    if (RNG::coin_flip(0.0005f)) log_ray(out, 10.0f);
     
     return trace_ray(out);
 }
