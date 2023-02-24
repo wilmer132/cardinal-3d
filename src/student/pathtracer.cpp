@@ -24,8 +24,7 @@ Spectrum Pathtracer::trace_pixel(size_t x, size_t y) {
     // Tip: Samplers::Rect::Uniform
     // Tip: you may want to use log_ray for debugging
     Samplers::Rect::Uniform sampler;
-
-    float pdf_sample = 1.0f / n_samples;
+    float pdf_sample;
     
     // Sample using pdf
     Vec2 xy_sample = sampler.sample(pdf_sample);
@@ -34,8 +33,6 @@ Spectrum Pathtracer::trace_pixel(size_t x, size_t y) {
     Ray out = camera.generate_ray(xy_uni);
 
     if (RNG::coin_flip(0.0005f)) log_ray(out, 10.0f);
-
-    //pdf_sample += pdf_sample;
     
     return trace_ray(out);
 }
