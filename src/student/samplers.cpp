@@ -6,18 +6,22 @@
 namespace Samplers {
 
 Vec2 Rect::Uniform::sample(float& pdf) const {
-
     // TODO (PathTracer): Task 1
     // Generate a uniformly random point on a rectangle of size (size.x by size.y)
-
     // Tip: consider using RNG::unit()  (see util/rand.h)
 
     // PDF is the probability density of the chosen sample
     // the PDF should integrate to 1 over the whole rectangle
-    pdf = 1.0f; 
-
     // Return the randomly generated point
-    return Vec2();
+    // (PathTracer): Task 1
+    // Generate a uniformly random point on a rectangle of size size.x * size.y
+    // Tip: RNG::unit()
+
+    //pdf = 1.0f; // the PDF should integrate to 1 over the whole rectangle
+    //pdf += 1.0f / n_samples;
+    //pdf += pdf;
+    pdf = 1 / (size.x * size.y);
+    return Vec2(RNG::unit() * size.x, RNG::unit() * size.y);
 }
 
 Vec3 Hemisphere::Cosine::sample(float& pdf) const {

@@ -1,5 +1,6 @@
 
 #include "../rays/tri_mesh.h"
+#include "lib/mat4.h"
 #include "debug.h"
 
 namespace PT {
@@ -11,8 +12,31 @@ BBox Triangle::bbox() const {
 
     // Beware of flat/zero-volume boxes! You may need to
     // account for that here, or later on in BBox::intersect
+    
+    float x_min = std::min({vertex_list[v0].position.x,
+                           vertex_list[v1].position.x,
+                           vertex_list[v2].position.x});
+    float y_min = std::min({vertex_list[v0].position.y,
+                           vertex_list[v1].position.y,
+                           vertex_list[v2].position.y});
+    float z_min = std::min({vertex_list[v0].position.z,
+                           vertex_list[v1].position.z,
+                           vertex_list[v2].position.z});
 
-    BBox box;
+    float x_max = std::max({vertex_list[v0].position.x,
+                           vertex_list[v1].position.x,
+                           vertex_list[v2].position.x});
+    float y_max = std::max({vertex_list[v0].position.y,
+                           vertex_list[v1].position.y,
+                           vertex_list[v2].position.y});
+    float z_max = std::max({vertex_list[v0].position.z,
+                           vertex_list[v1].position.z,
+                           vertex_list[v2].position.z});
+
+    Vec3 vec_min(x_min, y_min, z_min);
+    Vec3 vec_max(x_max, y_max, z_max);
+
+    BBox box(vec_min, vec_max);
     return box;
 }
 
@@ -25,24 +49,49 @@ Trace Triangle::hit(const Ray& ray) const {
     Tri_Mesh_Vert v_1 = vertex_list[v1];
     Tri_Mesh_Vert v_2 = vertex_list[v2];
 
-    // here just to avoid unused variable warnings, students should remove the following three lines.
-    (void)v_0;
-    (void)v_1;
-    (void)v_2;
     
-    // TODO (PathTracer): Task 2
+    // (PathTracer): Task 2
     // Intersect this ray with a triangle defined by the above three points.
     // Intersection should yield a ray t-value, and a hit point (u,v) on the surface of the triangle
 
+    // Define barycentric weights
+    Vec3 e_1 = v_1.position - v_0.position;
+    Vec3 e_2 = v_2.position - v_0.position;
+    Vec3 s = ray.point - v_0.position;
+    Vec3 d = ray.dir;
+
+    // Use Cramer's Rule
+    float frac = 1 / (dot(cross(e_1, d), e_2));
+    float det_x = dot(-cross(s, e_2), d);
+    float det_y = dot(cross(e_1, d), s);
+    float det_z = dot(-cross(s, e_2), e_1);
+
+    Vec3 soln = frac * Vec3(det_x, det_y, det_z);
+
     // You'll need to fill in a "Trace" struct describing information about the hit (or lack of hit)
+    float u = soln.x;
+    float v = soln.y;
+    float t = soln.z;
 
     Trace ret;
-    ret.origin = ray.point;
-    ret.hit = false;       // was there an intersection?
-    ret.distance = 0.0f;   // at what distance did the intersection occur?
-    ret.position = Vec3{}; // where was the intersection?
-    ret.normal = Vec3{};   // what was the surface normal at the intersection?
-                           // (this should be interpolated between the three vertex normals)
+    // ret.origin = ray.point;
+    ret.hit = (u > 0 &&
+               v > 0 &&
+               (u + v) <= 1 &&
+               t > ray.dist_bounds.x &&
+               t < ray.dist_bounds.y);          // intersection
+    if (ret.hit) {
+      ret.distance = t;                         // distance
+      ret.position = (ray.dir * t) + ray.point; // position
+
+      // vertex-interpolated normal
+      Vec3 n_total = ((1 - u - v) * v_0.normal + u * v_1.normal + v * v_2.normal).unit();
+      ret.normal = n_total;
+
+      // update ray dist_bounds
+      ray.dist_bounds = Vec2(ray.dist_bounds.x, t);
+    }
+
     return ret;
 }
 
