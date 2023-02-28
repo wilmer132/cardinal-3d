@@ -2,6 +2,7 @@
 #include "../rays/bvh.h"
 #include "debug.h"
 #include "float.h"
+#include <iostream>
 #include <stack>
 
 namespace PT {
@@ -56,7 +57,7 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     // There are no further descendants.
 
     // edge case
-    if(primitives.empty() || prims.size() <= max_leaf_size) {
+    if(primitives.empty()) {
         return;
     }
 
@@ -72,6 +73,13 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     node.bbox = bb;
     node.start = 0;
     node.size = primitives.size();
+
+    // Check if root node is past the size we want
+    if (node.size <= max_leaf_size) {
+        node.is_leaf();
+        return;
+    }
+
 
     // define variables for later usage
     const int NUM_BUCKETS = 16;
@@ -90,41 +98,37 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     std::vector<BBox> best_right;
     BBox best_leftBox;
     BBox best_rightBox;
-    int best_i;
-    
-    std::vector<std::vector<Primitive>> best_buckets;
+    size_t best_i;
 
+    std::vector<std::vector<size_t>> best_buckets;
+    
     /* Check 3 dimensions of axis */
-    for (int i = 0; i < 3; i++) {
-      /* Sort all primitives by the approrpiate axis */
-      std::vector<Primitive> v_axis;
+    for (size_t i = 0; i < 3; i++) {
       float b_start = FLT_MAX;
       float b_end = FLT_MIN;
-      for (int p = 0; p < primitives.size(); p++) { // make copy
+      for (size_t p = 0; p < primitives.size(); p++) {
         float b_curr = primitives[p].bbox().center()[i];
         if (b_curr < b_start) b_start = b_curr;
         if (b_curr > b_end) b_end = b_curr;
-        v_axis.push_back(primitives[p]);
       }
       
       /* Determine how big to make each bucket by range along axis */
       float b_delta = (b_end - b_start) / NUM_BUCKETS;
       
       /* Assign primitives to their respective buckets */
-      std::vector<std::vector<Primitive>> buckets;
+      std::vector<std::vector<size_t>> buckets;
       std::vector<BBox> bbuckets; // BBox for each bucket
       for (float b_loc = b_start; b_loc <= b_end; b_loc += b_delta) {
-          std::vector<Primitive> b_prims;
+          std::vector<size_t> b_prims;
           BBox bbucket = BBox();
-          for (int m = 0; m < v_axis.size(); m++) {
-            Primitive p = v_axis[m];
-            float p_center = p.bbox().center()[i];
+          for (size_t m = 0; m < primitives.size(); m++) {
+            float p_center = primitives[m].bbox().center()[i];
             // only add primitive to bucket if within range
             // i.e. within curr b_loc and b_loc + b_delta
             if (p_center >= b_loc && p_center < (b_loc + b_delta)) {
-              if (!b_prims.size()) {bbucket = p.bbox();}
-              else {bbucket.enclose(p.bbox());}
-              b_prims.push_back(p);
+              if (!b_prims.size()) {bbucket = primitives[m].bbox();}
+              else {bbucket.enclose(primitives[m].bbox());}
+              b_prims.push_back(m);
             }
           }
           bbuckets.push_back(bbucket);
@@ -141,14 +145,14 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
         float n_b = right_bbuckets.size();
 
         BBox b_a;
-        for (float j = 0; j < left_bbuckets.size(); j++) {
+        for (size_t j = 0; j < left_bbuckets.size(); j++) {
           if (j == 0) {b_a = left_bbuckets[j];}
-          else {b_a.enclose(left_bbuckets[i]);}
+          else {b_a.enclose(left_bbuckets[j]);}
         }
         float s_a = b_a.surface_area();
 
         BBox b_b;
-        for (float k = 0; k < right_bbuckets.size(); k++) {
+        for (size_t k = 0; k < right_bbuckets.size(); k++) {
           if (k == 0) {b_b = right_bbuckets[k];}
           else { b_b.enclose(right_bbuckets[k]);}
         }
@@ -169,6 +173,7 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
         }
       }
     }
+    std::cout << best_i << std::endl;
 
     // Create bounding boxes for children
     // BBox split_leftBox;
@@ -191,14 +196,20 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     // responsible for reorganizing the primitives in the primitives array so that
     // after a SAH split is computed, the chidren refer to contiguous ranges of primitives.
 
-    size_t startl = 0;
+    // approach
+    // 1 - identify smallest index of partition
+    // 2 - rearrange/swap next objects so they're next to smallest index, etc.
+    // 3 - we call smallest index... index + 1... index + lvec.size() - 1
+    size_t l_low_i = best_buckets[0][0];
     size_t rangel = 0;
-    for (int i = 0; i <= best_i; i++) {
-      std::vector<Primitive> curr_prims;
-      for (int j = 0; j < curr_prims.size(); j++) {
-        rangel++;
+    for (size_t b_i = 0; b_i <= best_i; b_i++) {
+      rangel += best_buckets[b_i].size();
+      for (size_t b = 1; b < best_buckets[b_i].size(); b++) {
+        if (best_buckets[b_i][b] < l_low_i) l_low_i = best_buckets[b_i][b];
       }
     }
+
+    size_t startl = l_low_i;
 
     size_t startr = startl + rangel;
     size_t ranger = primitives.size() - rangel;
@@ -216,8 +227,6 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     nodes[node_addr_r].bbox = best_rightBox;
     nodes[node_addr_r].start = startr;
     nodes[node_addr_r].size = ranger;
-
-    
 }
 
 template<typename Primitive>
