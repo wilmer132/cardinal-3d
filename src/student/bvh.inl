@@ -7,6 +7,177 @@
 
 namespace PT {
 
+template<typename Primitive>
+void BVH<Primitive>::build_helper(size_t& parent_node_i, size_t l, size_t size, size_t max_leaf_size) {
+  // Base case: size of sublist <= max leaf size.
+  if(size <= max_leaf_size) {
+      return;
+  }
+
+  // define variables for later usage
+  const int NUM_BUCKETS = 16;
+  float c_trav = 1;
+  float c_isect = 8;
+
+  /* Create variables to store best possible cut */
+  float lowest_cost = FLT_MAX;
+  std::vector<BBox> best_left;
+  std::vector<BBox> best_right;
+  BBox best_leftBox;
+  BBox best_rightBox;
+  // size_t best_i;
+  size_t best_n;
+
+  std::vector<std::vector<size_t>> best_buckets;
+  
+  /* Check 3 dimensions of axis */
+  for (size_t i = 0; i < 3; i++) {
+    float b_start = FLT_MAX;
+    float b_end = FLT_MIN;
+    /* Calculate b_start/b_end for specified l, r ranges. */
+    for (size_t p = l; p < l + size; p++) {
+      float b_curr = primitives[p].bbox().center()[i];
+      if (b_curr < b_start) b_start = b_curr;
+      if (b_curr > b_end) b_end = b_curr;
+    }
+    
+    /* Determine how big to make each bucket by range along axis */
+    float b_delta = (b_end - b_start) / NUM_BUCKETS;
+    
+    /* Assign primitives to their respective buckets */
+    std::vector<std::vector<size_t>> buckets;
+    std::vector<BBox> bbuckets; // BBox for each bucket
+    for (float b_loc = b_start; b_loc <= b_end; b_loc += b_delta) {
+        std::vector<size_t> b_prims;
+        BBox bbucket = BBox();
+        for (size_t m = l; m < l + size; m++) {
+          float p_center = primitives[m].bbox().center()[i];
+          // only add primitive to bucket if within range
+          // i.e. within curr b_loc and b_loc + b_delta
+          if (p_center >= b_loc && p_center < (b_loc + b_delta)) {
+            if (!b_prims.size()) {bbucket = primitives[m].bbox();}
+            else {bbucket.enclose(primitives[m].bbox());}
+            b_prims.push_back(m);
+          }
+        }
+        bbuckets.push_back(bbucket);
+        buckets.push_back(b_prims);
+    }
+
+    /* Find lowest cost slice along buckets */
+    /* BUCKETS - 1 -> num of unique partitions */
+    for (float n = 1; n < NUM_BUCKETS; n++) {
+      std::vector<BBox> left_bbuckets(bbuckets.begin(), bbuckets.begin() + n);
+      std::vector<BBox> right_bbuckets(bbuckets.begin() + n, bbuckets.end());
+
+      float n_a = left_bbuckets.size();
+      float n_b = right_bbuckets.size();
+
+      BBox b_a;
+      for (size_t j = 0; j < left_bbuckets.size(); j++) {
+        if (j == 0) {b_a = left_bbuckets[j];}
+        else {b_a.enclose(left_bbuckets[j]);}
+      }
+      float s_a = b_a.surface_area();
+
+      BBox b_b;
+      for (size_t k = 0; k < right_bbuckets.size(); k++) {
+        if (k == 0) {b_b = right_bbuckets[k];}
+        else { b_b.enclose(right_bbuckets[k]);}
+      }
+      float s_b = b_b.surface_area();
+
+      float cost = c_trav
+                    + (s_a / nodes[parent_node_i].bbox.surface_area()) * n_a * c_isect
+                    + (s_b / nodes[parent_node_i].bbox.surface_area()) * n_b * c_isect;
+
+      if (cost < lowest_cost) {
+          lowest_cost = cost;
+          best_left = left_bbuckets;
+          best_right = right_bbuckets;
+          best_leftBox = b_a;
+          best_rightBox = b_b;
+          best_n = n;
+          // best_i = i;
+          best_buckets = buckets;
+      }
+    }
+  }
+
+  // Create bounding boxes for children
+  // BBox split_leftBox;
+  // BBox split_rightBox;
+
+  // compute bbox for left child
+  // Primitive& p = primitives[0];
+  // BBox pbb = p.bbox();
+  // split_leftBox.enclose(pbb);
+
+  // compute bbox for right child
+  // for(size_t i = 1; i < primitives.size(); ++i) {
+  //     Primitive& p = primitives[i];
+  //     BBox pbb = p.bbox();
+  //     split_rightBox.enclose(pbb);
+  // }
+
+  // Note that by construction in this simple example, the primitives are
+  // contiguous as required. But in the students real code, students are
+  // responsible for reorganizing the primitives in the primitives array so that
+  // after a SAH split is computed, the chidren refer to contiguous ranges of primitives.
+  
+  /* Final vector to dictate grouping of Primitives. */
+  std::vector<size_t> final_left;
+  std::vector<size_t> final_right;
+
+  for (size_t i = 0; i < best_buckets.size(); i++) {
+    /* Add to respective final */
+    for (size_t j = 0; j < best_buckets[i].size(); j++) {
+      (i < best_n) ?
+        final_left.push_back(best_buckets[i][j]):
+        final_right.push_back(best_buckets[i][j]);
+    }
+  }
+
+  /* Swap primitives inside of primitives to maintain contiguous ranges.
+     Not guaranteed that final_left/final_right are of equal size.
+     Update separately. */
+  for (size_t i = l; i < l + final_left.size(); i++) {
+    /* Update value of parent_node_i as needed. */
+    // if (i == parent_node_i) parent_node_i = final_left[i - l];
+    std::swap(primitives[i], primitives[final_left[i - l]]);
+  }
+  for (size_t i = l + final_left.size(); i < l + final_left.size() + final_right.size(); i++) {
+    /* Update value of parent_node_i as needed. */
+    // if (i == parent_node_i) parent_node_i = final_right[i - l - final_left.size()];
+    std::swap(primitives[i], primitives[final_right[i - l - final_left.size()]]);
+  }
+
+  size_t startl = l;
+  size_t rangel = final_left.size();
+
+  size_t startr = l + final_left.size();
+  size_t ranger = final_right.size();
+
+  // create child nodes
+  size_t node_addr_l = new_node();
+  size_t node_addr_r = new_node();
+  nodes[parent_node_i].l = node_addr_l;
+  nodes[parent_node_i].r = node_addr_r;
+
+  nodes[node_addr_l].bbox = best_leftBox;
+  nodes[node_addr_l].start = startl;
+  nodes[node_addr_l].size = rangel;
+
+  nodes[node_addr_r].bbox = best_rightBox;
+  nodes[node_addr_r].start = startr;
+  nodes[node_addr_r].size = ranger;
+
+  std::cout << "Calling helper with root " << node_addr_l << ", start " << startl << ", size " << rangel << ", and max_leaf_size " << max_leaf_size << std::endl;
+  build_helper(node_addr_l, startl, rangel, max_leaf_size);
+  std::cout << "Calling helper with root " << node_addr_r << ", start " << startr << ", size " << ranger << ", and max_leaf_size " << max_leaf_size << std::endl;
+  build_helper(node_addr_r, startr, ranger, max_leaf_size);
+} 
+
 // construct BVH hierarchy given a vector of prims
 template<typename Primitive>
 void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size) {
@@ -74,159 +245,10 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     node.start = 0;
     node.size = primitives.size();
 
-    // Check if root node is past the size we want
-    if (node.size <= max_leaf_size) {
-        node.is_leaf();
-        return;
-    }
-
-
-    // define variables for later usage
-    const int NUM_BUCKETS = 16;
-    float c_trav = 1;
-    float c_isect = 8;
-
-    // Check 3 dimensions of axis (x, y, z)
-    // For each axis, we slice between each primitive to create individual buckest
-    // Try each slice of buckets (varying left & right sizes)
-    // We comapre these sizes of buckets to the parent to get the SA/SN
-    // Lowest cost across all buckets and across all axis is the one we want to keep
-
-    /* Create variables to store best possible cut */
-    float lowest_cost = FLT_MAX;
-    std::vector<BBox> best_left;
-    std::vector<BBox> best_right;
-    BBox best_leftBox;
-    BBox best_rightBox;
-    size_t best_i;
-
-    std::vector<std::vector<size_t>> best_buckets;
-    
-    /* Check 3 dimensions of axis */
-    for (size_t i = 0; i < 3; i++) {
-      float b_start = FLT_MAX;
-      float b_end = FLT_MIN;
-      for (size_t p = 0; p < primitives.size(); p++) {
-        float b_curr = primitives[p].bbox().center()[i];
-        if (b_curr < b_start) b_start = b_curr;
-        if (b_curr > b_end) b_end = b_curr;
-      }
-      
-      /* Determine how big to make each bucket by range along axis */
-      float b_delta = (b_end - b_start) / NUM_BUCKETS;
-      
-      /* Assign primitives to their respective buckets */
-      std::vector<std::vector<size_t>> buckets;
-      std::vector<BBox> bbuckets; // BBox for each bucket
-      for (float b_loc = b_start; b_loc <= b_end; b_loc += b_delta) {
-          std::vector<size_t> b_prims;
-          BBox bbucket = BBox();
-          for (size_t m = 0; m < primitives.size(); m++) {
-            float p_center = primitives[m].bbox().center()[i];
-            // only add primitive to bucket if within range
-            // i.e. within curr b_loc and b_loc + b_delta
-            if (p_center >= b_loc && p_center < (b_loc + b_delta)) {
-              if (!b_prims.size()) {bbucket = primitives[m].bbox();}
-              else {bbucket.enclose(primitives[m].bbox());}
-              b_prims.push_back(m);
-            }
-          }
-          bbuckets.push_back(bbucket);
-          buckets.push_back(b_prims);
-      }
-
-      /* Find lowest cost slice along buckets */
-      /* BUCKETS - 1 -> num of unique partitions */
-      for (float n = 1; n < NUM_BUCKETS; n++) {
-        std::vector<BBox> left_bbuckets(bbuckets.begin(), bbuckets.begin() + n);
-        std::vector<BBox> right_bbuckets(bbuckets.begin() + n, bbuckets.end());
-
-        float n_a = left_bbuckets.size();
-        float n_b = right_bbuckets.size();
-
-        BBox b_a;
-        for (size_t j = 0; j < left_bbuckets.size(); j++) {
-          if (j == 0) {b_a = left_bbuckets[j];}
-          else {b_a.enclose(left_bbuckets[j]);}
-        }
-        float s_a = b_a.surface_area();
-
-        BBox b_b;
-        for (size_t k = 0; k < right_bbuckets.size(); k++) {
-          if (k == 0) {b_b = right_bbuckets[k];}
-          else { b_b.enclose(right_bbuckets[k]);}
-        }
-        float s_b = b_b.surface_area();
-
-        float cost = c_trav
-                     + (s_a / node.bbox.surface_area()) * n_a * c_isect
-                     + (s_b / node.bbox.surface_area()) * n_b * c_isect;
-
-        if (cost < lowest_cost) {
-            lowest_cost = cost;
-            best_left = left_bbuckets;
-            best_right = right_bbuckets;
-            best_leftBox = b_a;
-            best_rightBox = b_b;
-            best_i = n;
-            best_buckets = buckets;
-        }
-      }
-    }
-    std::cout << best_i << std::endl;
-
-    // Create bounding boxes for children
-    // BBox split_leftBox;
-    // BBox split_rightBox;
-
-    // compute bbox for left child
-    // Primitive& p = primitives[0];
-    // BBox pbb = p.bbox();
-    // split_leftBox.enclose(pbb);
-
-    // compute bbox for right child
-    // for(size_t i = 1; i < primitives.size(); ++i) {
-    //     Primitive& p = primitives[i];
-    //     BBox pbb = p.bbox();
-    //     split_rightBox.enclose(pbb);
-    // }
-
-    // Note that by construction in this simple example, the primitives are
-    // contiguous as required. But in the students real code, students are
-    // responsible for reorganizing the primitives in the primitives array so that
-    // after a SAH split is computed, the chidren refer to contiguous ranges of primitives.
-
-    // approach
-    // 1 - identify smallest index of partition
-    // 2 - rearrange/swap next objects so they're next to smallest index, etc.
-    // 3 - we call smallest index... index + 1... index + lvec.size() - 1
-    size_t l_low_i = best_buckets[0][0];
-    size_t rangel = 0;
-    for (size_t b_i = 0; b_i <= best_i; b_i++) {
-      rangel += best_buckets[b_i].size();
-      for (size_t b = 1; b < best_buckets[b_i].size(); b++) {
-        if (best_buckets[b_i][b] < l_low_i) l_low_i = best_buckets[b_i][b];
-      }
-    }
-
-    size_t startl = l_low_i;
-
-    size_t startr = startl + rangel;
-    size_t ranger = primitives.size() - rangel;
-
-    // create child nodes
-    size_t node_addr_l = new_node();
-    size_t node_addr_r = new_node();
-    nodes[root_node_addr].l = node_addr_l;
-    nodes[root_node_addr].r = node_addr_r;
-
-    nodes[node_addr_l].bbox = best_leftBox;
-    nodes[node_addr_l].start = startl;
-    nodes[node_addr_l].size = rangel;
-
-    nodes[node_addr_r].bbox = best_rightBox;
-    nodes[node_addr_r].start = startr;
-    nodes[node_addr_r].size = ranger;
+    /* Use helper function to track current range of focus. */
+    std::cout << "Calling helper with root " << root_node_addr << ", start 0, size " << node.size << ", and max_leaf_size " << max_leaf_size << std::endl;
+    build_helper(root_node_addr, 0, node.size, max_leaf_size);
+    std::cout << "BVH Tree built. Exiting..." <<std::endl;
 }
 
 template<typename Primitive>
