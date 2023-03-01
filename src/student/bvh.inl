@@ -198,7 +198,7 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     nodes.clear();
     primitives = std::move(prims);
 
-    // TODO (PathTracer): Task 3
+    // (PathTracer): Task 3
     // Modify the code ahead to construct a BVH from the given vector of primitives and maximum leaf
     // size configuration.
     //
@@ -261,12 +261,41 @@ Trace BVH<Primitive>::hit(const Ray& ray) const {
 
     // The starter code simply iterates through all the primitives.
     // Again, remember you can use hit() on any Primitive value.
+    // for(const Primitive& prim : primitives) {
+    //   Trace hit = prim.hit(ray);
+    //   ret = Trace::min(ret, hit);
+    // }
 
+    // Retrieve root node
+    Node currNode = nodes[0];
+    Node lastHitNode;
+    bool hitBox = false;
+    // assume ray will hit box - not best assumption
+    while (!currNode.is_leaf()) {
+      if (nodes[currNode.l].bbox.hit(ray, ray.dist_bounds)) {
+        currNode = nodes[currNode.l];
+        lastHitNode = currNode;
+        hitBox = true;
+      } else if (nodes[currNode.r].bbox.hit(ray, ray.dist_bounds)) {
+        currNode = nodes[currNode.r];
+        lastHitNode = currNode;
+        hitBox = true;
+      } else {
+        break;
+      }
+    }
+
+
+    // we are at leaf. iterate over primitives
     Trace ret;
-    for(const Primitive& prim : primitives) {
+    if (hitBox) {
+      for (size_t i = 0; i < lastHitNode.size; i++) {
+        const Primitive& prim = primitives[lastHitNode.start + i];
         Trace hit = prim.hit(ray);
         ret = Trace::min(ret, hit);
+      }
     }
+
     return ret;
 }
 
