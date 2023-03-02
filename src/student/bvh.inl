@@ -11,7 +11,7 @@ template<typename Primitive>
 void BVH<Primitive>::build_helper(size_t& parent_node_i, size_t l, size_t size, size_t max_leaf_size) {
   // Base case: size of sublist <= max leaf size.
   if(size <= max_leaf_size) {
-      return;
+    return;
   }
 
   // define variables for later usage
@@ -104,22 +104,6 @@ void BVH<Primitive>::build_helper(size_t& parent_node_i, size_t l, size_t size, 
     }
   }
 
-  // Create bounding boxes for children
-  // BBox split_leftBox;
-  // BBox split_rightBox;
-
-  // compute bbox for left child
-  // Primitive& p = primitives[0];
-  // BBox pbb = p.bbox();
-  // split_leftBox.enclose(pbb);
-
-  // compute bbox for right child
-  // for(size_t i = 1; i < primitives.size(); ++i) {
-  //     Primitive& p = primitives[i];
-  //     BBox pbb = p.bbox();
-  //     split_rightBox.enclose(pbb);
-  // }
-
   // Note that by construction in this simple example, the primitives are
   // contiguous as required. But in the students real code, students are
   // responsible for reorganizing the primitives in the primitives array so that
@@ -136,6 +120,14 @@ void BVH<Primitive>::build_helper(size_t& parent_node_i, size_t l, size_t size, 
         final_left.push_back(best_buckets[i][j]):
         final_right.push_back(best_buckets[i][j]);
     }
+  }
+
+  /* Check if there has been a split - neither final_left & final_right
+     are equal to param size. */
+  /* TODO: Complete splitting and recalculating bboxes. */
+  if (final_left.size() == size || final_right.size() == size) {
+    std::cout << "No actual split. Exiting recursion..." << std::endl;
+    return;
   }
 
   /* Swap primitives inside of primitives to maintain contiguous ranges.
@@ -244,6 +236,47 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     node.bbox = bb;
     node.start = 0;
     node.size = primitives.size();
+
+    /* TODO: Remove before submission. Used for testing other tasks ONLY. */
+    // // Create bounding boxes for children
+    // BBox split_leftBox;
+    // BBox split_rightBox;
+
+    // // compute bbox for left child
+    // Primitive& p = primitives[0];
+    // BBox pbb = p.bbox();
+    // split_leftBox.enclose(pbb);
+
+    // // compute bbox for right child
+    // for(size_t i = 1; i < primitives.size(); ++i) {
+    //     Primitive& p = primitives[i];
+    //     BBox pbb = p.bbox();
+    //     split_rightBox.enclose(pbb);
+    // }
+
+    // // Note that by construction in this simple example, the primitives are
+    // // contiguous as required. But in the students real code, students are
+    // // responsible for reorganizing the primitives in the primitives array so that
+    // // after a SAH split is computed, the chidren refer to contiguous ranges of primitives.
+
+    // size_t startl = 0;  // starting prim index of left child
+    // size_t rangel = 1;  // number of prims in left child
+    // size_t startr = startl + rangel;  // starting prim index of right child
+    // size_t ranger = primitives.size() - rangel; // number of prims in right child
+
+    // // create child nodes
+    // size_t node_addr_l = new_node();
+    // size_t node_addr_r = new_node();
+    // nodes[root_node_addr].l = node_addr_l;
+    // nodes[root_node_addr].r = node_addr_r;
+
+    // nodes[node_addr_l].bbox = split_leftBox;
+    // nodes[node_addr_l].start = startl;
+    // nodes[node_addr_l].size = rangel;
+
+    // nodes[node_addr_r].bbox = split_rightBox;
+    // nodes[node_addr_r].start = startr;
+    // nodes[node_addr_r].size = ranger;
 
     /* Use helper function to track current range of focus. */
     std::cout << "Calling helper with root " << root_node_addr << ", start 0, size " << node.size << ", and max_leaf_size " << max_leaf_size << std::endl;
