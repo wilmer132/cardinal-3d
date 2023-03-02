@@ -9,7 +9,9 @@ Vec3 reflect(Vec3 dir) {
 
     // TODO (PathTracer): Task 6
     // Return reflection of dir about the surface normal (0,1,0).
-    return Vec3();
+    Vec3 norm(0, 1, 0);
+    Vec3 reflected = -dir + 2 * dot(dir, norm) * norm;
+    return reflected;
 }
 
 Vec3 refract(Vec3 out_dir, float index_of_refraction, bool& was_internal) {
@@ -51,8 +53,8 @@ BSDF_Sample BSDF_Mirror::sample(Vec3 out_dir) const {
     // Implement mirror BSDF
 
     BSDF_Sample ret;
-    ret.attenuation = Spectrum(); // What is the ratio of reflected/incoming light?
-    ret.direction = Vec3();       // What direction should we sample incoming light from?
+    ret.attenuation = reflectance; // What is the ratio of reflected/incoming light?
+    ret.direction = reflect(out_dir); // What direction should we sample incoming light from?
     ret.pdf = 0.0f; // Was was the PDF of the sampled direction? (In this case, the PMF)
     return ret;
 }

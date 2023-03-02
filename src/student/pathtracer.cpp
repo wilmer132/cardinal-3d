@@ -110,11 +110,11 @@ Spectrum Pathtracer::trace_ray(const Ray& ray) {
                 Ray shadow_ray(hit.position + EPS_F * sample.direction, sample.direction);
                 shadow_ray.dist_bounds = Vec2(EPS_F, sample.distance);
 
-                Trace shadow_hit = scene.hit(shadow_ray);
+                //Trace shadow_hit = scene.hit(shadow_ray);
                 // Note: that along with the typical cos_theta, pdf factors, we divide by samples.
                 // This is because we're doing another monte-carlo estimate of the lighting from
                 // area lights here.
-                if (!shadow_hit.hit)
+                //if (!shadow_hit.hit)
                   radiance_out += (cos_theta / (samples * sample.pdf)) * sample.radiance * attenuation;
             }
         };

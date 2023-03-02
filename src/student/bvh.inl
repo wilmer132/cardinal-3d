@@ -238,50 +238,50 @@ void BVH<Primitive>::build(std::vector<Primitive>&& prims, size_t max_leaf_size)
     node.size = primitives.size();
 
     /* TODO: Remove before submission. Used for testing other tasks ONLY. */
-    // // Create bounding boxes for children
-    // BBox split_leftBox;
-    // BBox split_rightBox;
+    // Create bounding boxes for children
+    BBox split_leftBox;
+    BBox split_rightBox;
 
-    // // compute bbox for left child
-    // Primitive& p = primitives[0];
-    // BBox pbb = p.bbox();
-    // split_leftBox.enclose(pbb);
+    // compute bbox for left child
+    Primitive& p = primitives[0];
+    BBox pbb = p.bbox();
+    split_leftBox.enclose(pbb);
 
-    // // compute bbox for right child
-    // for(size_t i = 1; i < primitives.size(); ++i) {
-    //     Primitive& p = primitives[i];
-    //     BBox pbb = p.bbox();
-    //     split_rightBox.enclose(pbb);
-    // }
+    // compute bbox for right child
+    for(size_t i = 1; i < primitives.size(); ++i) {
+        Primitive& p = primitives[i];
+        BBox pbb = p.bbox();
+        split_rightBox.enclose(pbb);
+    }
 
-    // // Note that by construction in this simple example, the primitives are
-    // // contiguous as required. But in the students real code, students are
-    // // responsible for reorganizing the primitives in the primitives array so that
-    // // after a SAH split is computed, the chidren refer to contiguous ranges of primitives.
+    // Note that by construction in this simple example, the primitives are
+    // contiguous as required. But in the students real code, students are
+    // responsible for reorganizing the primitives in the primitives array so that
+    // after a SAH split is computed, the chidren refer to contiguous ranges of primitives.
 
-    // size_t startl = 0;  // starting prim index of left child
-    // size_t rangel = 1;  // number of prims in left child
-    // size_t startr = startl + rangel;  // starting prim index of right child
-    // size_t ranger = primitives.size() - rangel; // number of prims in right child
+    size_t startl = 0;  // starting prim index of left child
+    size_t rangel = 1;  // number of prims in left child
+    size_t startr = startl + rangel;  // starting prim index of right child
+    size_t ranger = primitives.size() - rangel; // number of prims in right child
 
-    // // create child nodes
-    // size_t node_addr_l = new_node();
-    // size_t node_addr_r = new_node();
-    // nodes[root_node_addr].l = node_addr_l;
-    // nodes[root_node_addr].r = node_addr_r;
+    // create child nodes
+    size_t node_addr_l = new_node();
+    size_t node_addr_r = new_node();
+    nodes[root_node_addr].l = node_addr_l;
+    nodes[root_node_addr].r = node_addr_r;
 
-    // nodes[node_addr_l].bbox = split_leftBox;
-    // nodes[node_addr_l].start = startl;
-    // nodes[node_addr_l].size = rangel;
+    nodes[node_addr_l].bbox = split_leftBox;
+    nodes[node_addr_l].start = startl;
+    nodes[node_addr_l].size = rangel;
 
-    // nodes[node_addr_r].bbox = split_rightBox;
-    // nodes[node_addr_r].start = startr;
-    // nodes[node_addr_r].size = ranger;
+    nodes[node_addr_r].bbox = split_rightBox;
+    nodes[node_addr_r].start = startr;
+    nodes[node_addr_r].size = ranger;
 
     /* Use helper function to track current range of focus. */
-    std::cout << "Calling helper with root " << root_node_addr << ", start 0, size " << node.size << ", and max_leaf_size " << max_leaf_size << std::endl;
-    build_helper(root_node_addr, 0, node.size, max_leaf_size);
-    std::cout << "BVH Tree built. Exiting..." <<std::endl;
+    // std::cout << "Calling helper with root " << root_node_addr << ", start 0, size " << node.size << ", and max_leaf_size " << max_leaf_size << std::endl;
+    // build_helper(root_node_addr, 0, node.size, max_leaf_size);
+    // std::cout << "BVH Tree built. Exiting..." <<std::endl;
 }
 
 template<typename Primitive>
